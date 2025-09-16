@@ -47,7 +47,7 @@ For more information please visit the [No Code of Conduct](https://github.com/do
 1. **Fork and Clone**
 
    ```bash
-   git submodule add https://github.com/hao-vc/haolib.git
+   git clone https://github.com/hao-vc/haolib.git
    cd haolib
    ```
 
@@ -115,11 +115,6 @@ uv run pytest
 # Run tests with coverage
 uv run pytest --cov=haolib --cov-report=html
 
-# Run specific test file
-uv run pytest tests/test_jwt.py
-
-# Run tests in parallel
-uv run pytest -n auto
 ```
 
 ### Writing Tests
@@ -302,7 +297,6 @@ If you need help or have questions:
 
 Contributors are recognized in:
 
-- CHANGELOG.md for each release
 - GitHub contributors page
 - Special recognition for significant contributions
 
