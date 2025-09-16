@@ -90,16 +90,6 @@ jobs:
       run: |
         uv run pytest --cov=haolib --cov-report=xml --cov-report=term-missing -v
         
-    - name: Upload coverage reports to Codecov
-      uses: codecov/codecov-action@v4
-      with:
-        file: ./coverage.xml
-        flags: unittests
-        name: codecov-umbrella
-        fail_ci_if_error: true
-      env:
-        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-
   security:
     runs-on: ubuntu-latest
     name: Security Scan

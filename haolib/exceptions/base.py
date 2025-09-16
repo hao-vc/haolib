@@ -4,7 +4,6 @@ from abc import ABCMeta
 from collections.abc import Sequence
 from logging import getLogger
 from typing import Any, TypedDict
-from uuid import UUID
 
 from fastapi import HTTPException, status
 

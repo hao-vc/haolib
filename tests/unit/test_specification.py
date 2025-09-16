@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime  # noqa: TC003
 from typing import Any
 
 import pytest
@@ -308,7 +308,7 @@ class BaseSpecificationForTest(BaseSpecification):
 
     def is_satisfied_by(self, obj: Any) -> bool:
         """Test specification."""
-        return True
+        return bool(obj)
 
 
 def test_sqlalchemy_specification_raises_error_when_specification_is_not_valid() -> None:

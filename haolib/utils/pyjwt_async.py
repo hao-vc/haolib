@@ -16,9 +16,9 @@ class AsyncPyJWKClient:
     def __init__(
         self,
         uri: str,
-        cache_keys: bool = False,  # noqa: FBT001 FBT002
+        cache_keys: bool = False,
         max_cached_keys: int = 16,
-        cache_jwk_set: bool = True,  # noqa: FBT001 FBT002
+        cache_jwk_set: bool = True,
         lifespan: int = 300,
         headers: dict[str, Any] | None = None,
         timeout: int = 30,
@@ -70,7 +70,7 @@ class AsyncPyJWKClient:
             if self.jwk_set_cache is not None:
                 self.jwk_set_cache.put(jwk_set)
 
-    async def get_jwk_set(self, refresh: bool = False) -> PyJWKSet:  # noqa: FBT001 FBT002
+    async def get_jwk_set(self, refresh: bool = False) -> PyJWKSet:
         """Get JWK set."""
         data = None
         if self.jwk_set_cache is not None and not refresh:
@@ -84,7 +84,7 @@ class AsyncPyJWKClient:
 
         return PyJWKSet.from_dict(data)
 
-    async def get_signing_keys(self, refresh: bool = False) -> list[PyJWK]:  # noqa: FBT001 FBT002
+    async def get_signing_keys(self, refresh: bool = False) -> list[PyJWK]:
         """Get signing keys."""
         jwk_set = await self.get_jwk_set(refresh)
         signing_keys = [
