@@ -1,6 +1,6 @@
 """Queues router."""
 
-from faststream.kafka.opentelemetry import KafkaTelemetryMiddleware
+from faststream.confluent.opentelemetry import KafkaTelemetryMiddleware
 from opentelemetry import trace
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
