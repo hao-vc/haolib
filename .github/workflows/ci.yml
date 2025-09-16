@@ -58,7 +58,6 @@ jobs:
         image: postgres:15-alpine
         env:
           POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: test_haolib
         ports:
           - 5432:5432
         options: >-
@@ -88,7 +87,6 @@ jobs:
       env:
         REDIS_URL: redis://localhost:6379/0
         SQLALCHEMY__DATABASE_URL: postgresql://postgres:postgres@localhost:5432
-        JWT_SECRET_KEY: test-secret-key-for-github-actions-32-chars
       run: |
         uv run pytest --cov=haolib --cov-report=xml --cov-report=term-missing -v
         
