@@ -1,0 +1,171 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    name: Lint Code
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install uv
+      uses: astral-sh/setup-uv@v3
+      with:
+        version: "latest"
+        
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.13"
+        
+    - name: Install dependencies
+      run: uv sync --dev
+      
+    - name: Run ruff linting
+      run: |
+        uv run ruff check .
+        uv run ruff format --check .
+        
+    - name: Run type checking with mypy
+      run: uv run mypy haolib
+      continue-on-error: true  # Allow mypy to fail for now
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.13"]
+        
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+          
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_haolib
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install uv
+      uses: astral-sh/setup-uv@v3
+      with:
+        version: "latest"
+        
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+        
+    - name: Install dependencies
+      run: uv sync --dev
+      
+    - name: Run tests with coverage
+      env:
+        REDIS_URL: redis://localhost:6379/0
+        SQLALCHEMY__DATABASE_URL: postgresql://postgres:postgres@localhost:5432
+        JWT_SECRET_KEY: test-secret-key-for-github-actions-32-chars
+      run: |
+        uv run pytest --cov=haolib --cov-report=xml --cov-report=term-missing -v
+        
+    - name: Upload coverage reports to Codecov
+      uses: codecov/codecov-action@v4
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: true
+      env:
+        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  security:
+    runs-on: ubuntu-latest
+    name: Security Scan
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install uv
+      uses: astral-sh/setup-uv@v3
+      with:
+        version: "latest"
+        
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.13"
+        
+    - name: Install dependencies
+      run: uv sync --dev
+      
+    - name: Run safety check for vulnerabilities
+      run: |
+        uv add safety
+        uv run safety check --json --output safety-report.json
+      continue-on-error: true
+      
+    - name: Upload security reports
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: security-reports
+        path: |
+          safety-report.json
+
+  build:
+    runs-on: ubuntu-latest
+    name: Build Package
+    needs: [lint, test, security]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install uv
+      uses: astral-sh/setup-uv@v3
+      with:
+        version: "latest"
+        
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.13"
+        
+    - name: Build package
+      run: uv build
+      
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: dist
+        path: dist/
+        
+    - name: Check package metadata
+      run: |
+        uv add twine
+        uv run twine check dist/*
