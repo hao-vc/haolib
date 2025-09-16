@@ -6,15 +6,15 @@ A comprehensive Python utility library designed for building robust backend appl
 
 ## Features
 
-🚀 **Application Builder** - Fluent API for setting up FastAPI applications with all necessary components
-⚙️ **Configuration Management** - Pydantic-based configuration with environment variable support
-🔒 **Authentication & Security** - JWT services, password hashing, and encryption utilities
-🚨 **Exception Handling** - Rich exception hierarchy with logging and structured error responses
-📊 **Observability** - OpenTelemetry integration for distributed tracing and monitoring
-🔄 **Idempotency** - Built-in idempotency middleware with Redis backing
-🧩 **Specification Pattern** - Flexible filtering and querying with specification objects
-🗄️ **Database Models** - Enhanced SQLAlchemy base models with serialization capabilities
-🛠️ **Utilities** - UUID generation, password utilities, HTTP scheme detection, and more
+- 🚀 **Application Builder** - Fluent API for setting up FastAPI applications with all necessary components
+- ⚙️ **Configuration Management** - Pydantic-based configuration with environment variable support
+- 🔒 **Authentication & Security** - JWT services, password hashing, and encryption utilities
+- 🚨 **Exception Handling** - Rich exception hierarchy with logging and structured error responses
+- 📊 **Observability** - OpenTelemetry integration for distributed tracing and monitoring
+- 🔄 **Idempotency** - Built-in idempotency middleware with Redis backing
+- 🧩 **Specification Pattern** - Flexible filtering and querying with specification objects
+- 🗄️ **Database Models** - Enhanced SQLAlchemy base models with serialization capabilities
+- 🛠️ **Utilities** - UUID generation, password utilities, HTTP scheme detection, and more
 
 ## Installation
 
