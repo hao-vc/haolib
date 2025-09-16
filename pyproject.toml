@@ -36,6 +36,10 @@ dependencies = [
     "uvloop>=0.21.0",
 ]
 
+[tool.setuptools.package-data]
+"haolib" = ["py.typed"]
+
+
 [tool.ruff]
 target-version = "py313"
 line-length = 120
@@ -74,7 +78,6 @@ lint.ignore = [
 [tool.coverage.run]
 # We need *__dishka_factory* here to be excluded because it is a generated file by dishka.
 omit = ["*/lib/*", "*__dishka_factory*", "app.py", "dependencies.py", "tests/*"]
-
 
 [dependency-groups]
 dev = [
