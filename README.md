@@ -14,7 +14,7 @@ A comprehensive Python utility library designed for building robust backend appl
 - 🔄 **Idempotency** - Built-in idempotency middleware with Redis backing
 - 🧩 **Specification Pattern** - Flexible filtering and querying with specification objects
 - 🗄️ **Database Models** - Enhanced SQLAlchemy base models with serialization capabilities
-- 🛠️ **Utilities** - UUID generation, password utilities, HTTP scheme detection, and more
+- 🛠️ **Utilities** - UUID generation, HTTP scheme detection, typography utilities, and more
 
 ## Installation
 
@@ -29,78 +29,58 @@ uv add git+https://github.com/hao-vc/haolib
 Here's a minimal example of setting up a FastAPI application with HAOlib:
 
 ```python
-from dishka import AsyncContainer
+import asyncio
+
+import uvloop
 from fastapi import FastAPI
 from haolib.app import AppBuilder
-from haolib.configs.server import ServerConfig
 from haolib.configs.observability import ObservabilityConfig
+from haolib.configs.server import ServerConfig
 
-# Create FastAPI app and dependency container
-app = FastAPI(title="My HAO Application")
-container = AsyncContainer()
+from app.dependencies import create_container
+from app.routers.queues.router import mq_router
+from app.routers.router import router
+from app.version import __version__
 
-# Build the application with HAOlib
-builder = AppBuilder(container, app)
 
-async def setup_app():
-    """Setup the application with all necessary components."""
-    final_app = await (
-        builder
-        .setup_observability(ObservabilityConfig.from_env())
-        .setup_exception_handlers()
-        .setup_cors_middleware()
-        .setup_idempotency_middleware()
-        .get_app()
+async def main() -> None:
+    """Main entry point for the application."""
+    container = create_container()
+    app = FastAPI(
+        title="Python Backend Template",
+        description="Python Backend Template.",
+        version=__version__,
     )
-    
-    # Get configured server
-    server_config = ServerConfig.from_env()
-    server = await builder.get_server(server_config)
-    
-    return server
 
-# Run the application
+    app.include_router(router)
+
+    builder = AppBuilder(
+        container,
+        app,
+    )
+
+    await builder.setup_dishka()
+    await builder.setup_faststream(mq_router.broker)
+    await builder.setup_idempotency_middleware()
+    await builder.setup_exception_handlers()
+    await builder.setup_cors_middleware()
+    await builder.setup_observability(observability_config=await container.get(ObservabilityConfig))
+
+    server = await builder.get_server(server_config=await container.get(ServerConfig))
+    await server.serve()
+
+
 if __name__ == "__main__":
-    import asyncio
-    
-    server = asyncio.run(setup_app())
-    server.run()
+    uvloop.install()
+    asyncio.run(main())
+
 ```
 
 ## Core Components
 
 ### 1. Application Builder
 
-The `AppBuilder` provides a fluent interface for configuring FastAPI applications:
-
-```python
-from haolib.app import AppBuilder
-from haolib.configs.base import BaseConfig
-from dishka import AsyncContainer
-from fastapi import FastAPI, APIRouter
-
-class MyAppConfig(BaseConfig):
-    observability: ObservabilityConfig
-    
-config = MyAppConfig.from_env()
-
-app = FastAPI()
-container = AsyncContainer()
-router = APIRouter()
-
-builder = AppBuilder(container, app)
-
-# Chain configuration methods
-configured_app = await (
-    builder
-    .setup_observability(config.observability)
-    .setup_exception_handlers()
-    .setup_cors_middleware()
-    .setup_idempotency_middleware()
-    .setup_router(router)
-    .get_app()
-)
-```
+The `AppBuilder` provides a fluent interface for configuring FastAPI applications.
 
 ### 2. Configuration Management
 
@@ -157,7 +137,7 @@ Error scheme that will be returned to the client:
 Secure JWT token handling with configurable algorithms:
 
 ```python
-from haolib.services.jwt import JWTService
+from haolib.security.jwt import JWTService
 from haolib.configs.jwt import JWTConfig
 from pydantic import BaseModel
 
@@ -180,7 +160,7 @@ decoded_data = jwt_service.decode(token, UserData)
 Secure password hashing and verification using bcrypt:
 
 ```python
-from haolib.utils.hash_password import hash_password, verify_password
+from haolib.security.passwords import hash_password, verify_password
 
 # Hash a password
 hashed = hash_password("user_password")
@@ -296,12 +276,12 @@ curl -X POST /api/orders \
 - **`haolib.configs`** - Configuration management classes
 - **`haolib.exceptions`** - Exception hierarchy and handlers
 - **`haolib.models`** - Database model base classes and mixins
-- **`haolib.services`** - JWT, encryption, and other services
+- **`haolib.security`** - JWT, encryption, password hashing, and other security services
 - **`haolib.middlewares`** - Request/response middlewares
 - **`haolib.specification`** - Specification pattern implementation
 - **`haolib.enums`** - Utility enums
 - **`haolib.observability`** - OpenTelemetry and monitoring setup
-- **`haolib.utils`** - Utility functions
+- **`haolib.utils`** - UUID generation, HTTP scheme detection, typography utilities
 
 ### Configuration Classes
 

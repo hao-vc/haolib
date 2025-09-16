@@ -14,9 +14,8 @@ dependencies = [
     "bcrypt>=4.3.0",
     "cryptography>=45.0.6",
     "dishka>=1.6.0",
-    "fastapi>=0.116.1",
+    "fastapi[kafka]>=0.116.1",
     "fastapi-idempotent>=0.0.3",
-    "faststream[confluent]>=0.5.48",
     "httpx>=0.28.1",
     "opentelemetry-distro>=0.57b0",
     "opentelemetry-exporter-otlp-proto-grpc>=1.36.0",
@@ -34,6 +33,7 @@ dependencies = [
     "tenacity>=9.1.2",
     "uvicorn>=0.35.0",
     "uvloop>=0.21.0",
+    "faststream[confluent]>=0.5.48",
 ]
 
 [tool.setuptools.package-data]

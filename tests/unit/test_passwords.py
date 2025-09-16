@@ -1,6 +1,6 @@
 """Test hash password."""
 
-from haolib.utils.hash_password import hash_password, verify_password
+from haolib.security.passwords import hash_password, verify_password
 
 
 def test_hash_password() -> None:

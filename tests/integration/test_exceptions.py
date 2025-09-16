@@ -17,7 +17,7 @@ from haolib.exceptions.base import (
     ServiceUnavailableException,
     TooManyRequestsException,
     UnauthorizedException,
-    UnprocessableEntityException,
+    UnprocessableContentException,
 )
 from haolib.utils.typography import to_constant_case
 
@@ -64,7 +64,7 @@ class ConflictExceptionForTest(ConflictException):
     additional_info = {"test": "test"}
 
 
-class UnprocessableEntityExceptionForTest(UnprocessableEntityException):
+class UnprocessableEntityExceptionForTest(UnprocessableContentException):
     """Test exception."""
 
     detail = "Test exception"

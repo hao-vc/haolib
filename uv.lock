@@ -700,7 +700,7 @@ requires-dist = [
     { name = "bcrypt", specifier = ">=4.3.0" },
     { name = "cryptography", specifier = ">=45.0.6" },
     { name = "dishka", specifier = ">=1.6.0" },
-    { name = "fastapi", specifier = ">=0.116.1" },
+    { name = "fastapi", extras = ["kafka"], specifier = ">=0.116.1" },
     { name = "fastapi-idempotent", specifier = ">=0.0.3" },
     { name = "faststream", extras = ["confluent"], specifier = ">=0.5.48" },
     { name = "httpx", specifier = ">=0.28.1" },
