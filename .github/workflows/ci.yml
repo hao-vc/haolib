@@ -84,7 +84,7 @@ jobs:
       
     - name: Run tests with coverage
       env:
-        REDIS_URL: redis://localhost:6379/0
+        REDIS__URL: redis://localhost:6379/0
         SQLALCHEMY__URL: postgresql://postgres:postgres@localhost:5432
         IDEMPOTENCY__TTL: 120000
       run: |
