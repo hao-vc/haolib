@@ -25,7 +25,13 @@ class AppBuilder:
     """App builder."""
 
     def __init__(self, container: AsyncContainer, app: FastAPI) -> None:
-        """Initialize the app builder."""
+        """Initialize the app builder.
+
+        Args:
+            container: The container.
+            app: The FastAPI app.
+
+        """
         self._container = container
         self._app = app
 
@@ -36,7 +42,12 @@ class AppBuilder:
         return self
 
     async def setup_faststream(self, broker: KafkaBroker) -> Self:
-        """Setup faststream."""
+        """Setup faststream.
+
+        Args:
+            broker: The Confluent Kafka broker.
+
+        """
         setup_dishka_faststream(self._container, broker=broker, finalize_container=False)
 
         return self
@@ -60,19 +71,35 @@ class AppBuilder:
         return self
 
     async def setup_observability(self, observability_config: ObservabilityConfig) -> Self:
-        """Setup observability."""
+        """Setup observability.
+
+        Args:
+            observability_config: The observability config.
+
+        """
         setup_observability_for_fastapi(self._app, config=observability_config)
 
         return self
 
     async def setup_exception_handlers(self, should_observe_exceptions: bool = True) -> Self:
-        """Setup exception handlers."""
+        """Setup exception handlers.
+
+        Args:
+            should_observe_exceptions: Whether to observe exceptions.
+
+        """
         register_exception_handlers(self._app, should_observe_exceptions=should_observe_exceptions)
 
         return self
 
     async def setup_cors_middleware(self) -> Self:
-        """Setup CORS middleware."""
+        """Setup CORS middleware.
+
+        Args:
+            container: The container.
+            app: The FastAPI app.
+
+        """
         self._app.add_middleware(
             CORSMiddleware,
             allow_origins=["*"],
@@ -84,12 +111,23 @@ class AppBuilder:
         return self
 
     async def get_app(self) -> FastAPI:
-        """Build the app."""
+        """Build the app.
+
+        Args:
+            container: The container.
+            app: The FastAPI app.
+
+        """
 
         return self._app
 
     async def get_server(self, server_config: ServerConfig) -> Server:
-        """Get the server."""
+        """Get the server.
+
+        Args:
+            server_config: The server config.
+
+        """
 
         config = Config(
             self._app,

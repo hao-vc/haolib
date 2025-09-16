@@ -168,10 +168,10 @@ class GoneException(AbstractException):
     status_code = status.HTTP_410_GONE
 
 
-class UnprocessableEntityException(AbstractException):
-    """422 Unprocessable Entity."""
+class UnprocessableContentException(AbstractException):
+    """422 Unprocessable Content."""
 
-    status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
+    status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
 
 
 class TooManyRequestsException(AbstractException):
