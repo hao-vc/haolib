@@ -93,13 +93,7 @@ class AppBuilder:
         return self
 
     async def setup_cors_middleware(self) -> Self:
-        """Setup CORS middleware.
-
-        Args:
-            container: The container.
-            app: The FastAPI app.
-
-        """
+        """Setup CORS middleware."""
         self._app.add_middleware(
             CORSMiddleware,
             allow_origins=["*"],
@@ -111,13 +105,7 @@ class AppBuilder:
         return self
 
     async def get_app(self) -> FastAPI:
-        """Build the app.
-
-        Args:
-            container: The container.
-            app: The FastAPI app.
-
-        """
+        """Build the app."""
 
         return self._app
 
