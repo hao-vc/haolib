@@ -14,7 +14,6 @@ dependencies = [
     "bcrypt>=4.3.0",
     "cryptography>=45.0.6",
     "dishka>=1.6.0",
-    "fastapi[kafka]>=0.116.1",
     "fastapi-idempotent>=0.0.3",
     "httpx>=0.28.1",
     "opentelemetry-distro>=0.57b0",
