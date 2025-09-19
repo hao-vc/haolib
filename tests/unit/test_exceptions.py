@@ -1,5 +1,7 @@
 """Tests exceptions."""
 
+import pytest
+
 from haolib.exceptions.base import AbstractException, BadRequestException, NotFoundException
 from haolib.exceptions.handler import to_error_schema
 
@@ -42,6 +44,12 @@ class CustomException(AbstractException):
     detail = "A custom exception {test}"
 
 
+class CustomExceptionWithoutFormatSpecifiers(AbstractException):
+    """Custom exception without error code."""
+
+    detail = "A custom exception"
+
+
 def test_exception_formatting() -> None:
     """Test exception formatting."""
 
@@ -53,6 +61,12 @@ def test_exception_formatting() -> None:
 
     assert exc.additional_info == {"anything_else": 123}
 
+    exc_without_format_specifiers = CustomExceptionWithoutFormatSpecifiers(
+        headers={"X-Test": "test"}, additional_info={"anything_else": 123}
+    )
+
+    assert exc_without_format_specifiers.detail == "A custom exception"
+
 
 def test_exception_representation() -> None:
     """Test exception representation."""
@@ -61,3 +75,41 @@ def test_exception_representation() -> None:
 
     assert str(exc) == "<CustomException (code: 500)> A custom exception 12345"
     assert repr(exc) == "<CustomException (code: 500)> A custom exception 12345"
+
+
+def test_exception_error_code() -> None:
+    """Test exception error code."""
+
+    exc = CustomException(test="12345", headers={"X-Test": "test"}, additional_info={"anything_else": 123})
+
+    assert exc.error_code == "CUSTOM_EXCEPTION"
+
+    assert exc.get_class_error_code() == "CUSTOM_EXCEPTION"
+
+
+class CustomExceptionWithFewFormatSpecifiers(AbstractException):
+    """Custom exception with few format specifiers."""
+
+    detail = "A custom exception {test} {test2}"
+
+
+def test_exception_format_detail_from_kwargs_raises_error() -> None:
+    """Test exception format detail from kwargs."""
+
+    with pytest.raises(ValueError):
+        CustomException(headers={"X-Test": "test"}, additional_info={"anything_else": 123})
+
+    with pytest.raises(ValueError):
+        CustomException(not_test="12345", headers={"X-Test": "test"}, additional_info={"anything_else": 123})
+
+    with pytest.raises(ValueError):
+        CustomExceptionWithFewFormatSpecifiers(
+            test2="12345", headers={"X-Test": "test"}, additional_info={"anything_else": 123}
+        )
+
+    assert (
+        CustomExceptionWithFewFormatSpecifiers(
+            test="12345", test2="123456", headers={"X-Test": "test"}, additional_info={"anything_else": 123}
+        ).detail
+        == "A custom exception 12345 123456"
+    )
