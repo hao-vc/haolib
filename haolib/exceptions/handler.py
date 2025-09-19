@@ -9,7 +9,6 @@ from pydantic import BaseModel, Field, create_model
 
 from haolib.exceptions.base import AbstractException
 from haolib.observability.fastapi import observe_exception
-from haolib.utils.typography import to_constant_case
 
 logger = logging.getLogger(__name__)
 
@@ -41,8 +40,8 @@ def to_error_schema(exc_list: list[type[AbstractException]]) -> type[ErrorSchema
         error_code=(
             str,
             Field(
-                description=" OR ".join([to_constant_case(exc.__name__) for exc in exc_list]),
-                examples=[" OR ".join([to_constant_case(exc.__name__) for exc in exc_list])],
+                description=" OR ".join([exc.get_class_error_code() for exc in exc_list]),
+                examples=[" OR ".join([exc.get_class_error_code() for exc in exc_list])],
             ),
         ),
         detail=(
@@ -68,7 +67,7 @@ async def abstract_exception_handler(
     """
 
     error_schema = ErrorSchema(
-        error_code=to_constant_case(exc.__class__.__name__),
+        error_code=exc.current_error_code,
         detail=exc.current_detail,
         additional_info=exc.current_additional_info,
     ).model_dump(mode="json")

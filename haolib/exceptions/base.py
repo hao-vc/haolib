@@ -1,11 +1,14 @@
 """Abstract base classes for exceptions."""
 
+import string
 from abc import ABCMeta
 from collections.abc import Sequence
 from logging import getLogger
 from typing import Any, TypedDict
 
 from fastapi import HTTPException, status
+
+from haolib.utils.typography import to_constant_case
 
 logger = getLogger(__name__)
 
@@ -65,6 +68,7 @@ class AbstractException(ApiException, metaclass=ABCMeta):
         status_code: int | None = None,
         *,
         headers: dict[str, str] | None = None,
+        error_code: str | None = None,
         additional_info: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> None:
@@ -74,6 +78,7 @@ class AbstractException(ApiException, metaclass=ABCMeta):
             detail (str): Exception detail.
             status_code (int): HTTP status_codes code.
             headers (dict): Headers to be added to the response.
+            error_code (str): Error code to be added to the response.
             additional_info (dict): Additional info to be added to the response.
             **kwargs (Any): Additional kwargs to be added to the exception.
 
@@ -84,6 +89,7 @@ class AbstractException(ApiException, metaclass=ABCMeta):
             status_code=status_code,
             headers=headers,
             additional_info=additional_info,
+            error_code=error_code,
         )
         self._format_detail_from_kwargs(kwargs)
         super().__init__(
@@ -92,11 +98,22 @@ class AbstractException(ApiException, metaclass=ABCMeta):
             headers=self.current_headers,
         )
 
+    @classmethod
+    def get_class_error_code(cls) -> str:
+        """Get error code. It's a constant case of the class name."""
+        return to_constant_case(cls.__name__)
+
+    @property
+    def error_code(self) -> str:
+        """Error code."""
+        return self.current_error_code
+
     def _initialize_attributes(
         self,
         detail: str | None,
         status_code: int | None,
         headers: dict[str, str] | None,
+        error_code: str | None = None,
         *,
         additional_info: dict[str, Any] | None,
     ) -> None:
@@ -105,11 +122,28 @@ class AbstractException(ApiException, metaclass=ABCMeta):
         self.current_headers = (self.headers or {}) | (headers or {})
         self.current_status_code = status_code or self.status_code
         self.current_additional_info = (self.additional_info or {}).copy() | (additional_info or {})
+        self.current_error_code = error_code or self.get_class_error_code()
 
     def _format_detail_from_kwargs(self, kwargs: dict[str, Any]) -> None:
         """Format exception detail message using kwargs if applicable."""
-        if not (kwargs and self.current_detail is not None and self.format_detail_from_kwargs):
+        arguments_to_format = [tup[1] for tup in string.Formatter().parse(self.current_detail) if tup[1]]
+
+        if not arguments_to_format:
             return
+
+        if not kwargs:
+            message = (
+                f"Detail '{self.current_detail}' contains format specifiers "
+                "but no corresponding arguments were passed to the exception constructor"
+            )
+            raise ValueError(message)
+
+        if not all(arg in kwargs for arg in arguments_to_format):
+            message = (
+                f"Detail '{self.current_detail}' contains format specifiers "
+                "that are not passed to the exception constructor as arguments"
+            )
+            raise ValueError(message)
 
         self.current_detail = self.current_detail.format_map(kwargs)
 
