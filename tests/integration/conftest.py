@@ -2,8 +2,9 @@
 
 import pytest_asyncio
 from dishka import AsyncContainer, Provider, Scope, make_async_container, provide
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
+from fastmcp import FastMCP
 from httpx import ASGITransport, AsyncClient
 from pydantic import Field
 
@@ -81,6 +82,24 @@ async def app_with_observability(container: AsyncContainer) -> FastAPI:
     await app_builder.setup_exception_handlers(should_observe_exceptions=True)
     await app_builder.setup_idempotency_middleware()
     return await app_builder.get_app()
+
+
+@pytest_asyncio.fixture
+async def app_with_mcp_and_mcp(container: AsyncContainer) -> tuple[FastAPI, FastMCP]:
+    """Test app."""
+
+    app = FastAPI()
+    app_builder = AppBuilder(container=container, app=app)
+
+    @app.post("/hello")
+    async def hello(body: Request) -> str:
+        return "hello"
+
+    await app_builder.setup_dishka()
+    await app_builder.setup_exception_handlers(should_observe_exceptions=False)
+    fast_mcp = FastMCP.from_fastapi(app=app)
+    await app_builder.setup_mcp(fast_mcp, "/mcp")
+    return await app_builder.get_app(), fast_mcp
 
 
 @pytest_asyncio.fixture
