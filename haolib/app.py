@@ -1,7 +1,6 @@
 """Application builder."""
 
-from collections.abc import AsyncGenerator, Awaitable, Callable
-from contextlib import asynccontextmanager
+from collections.abc import Awaitable, Callable
 from typing import Self
 
 from dishka import AsyncContainer, Scope
@@ -11,7 +10,6 @@ from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastmcp import FastMCP
 from faststream.confluent import KafkaBroker
-from starlette.types import Lifespan
 from uvicorn import Config, Server
 
 from haolib.configs.observability import ObservabilityConfig
@@ -128,20 +126,12 @@ class AppBuilder:
 
         return Server(config)
 
-    async def setup_mcp(self, mcp: FastMCP, path: str, lifespan: Lifespan | None = None) -> Self:
+    async def setup_mcp(self, mcp: FastMCP, path: str) -> Self:
         """Setup MCP."""
 
         mcp_app = mcp.http_app(path=path)
 
-        if lifespan is not None:
-
-            @asynccontextmanager
-            async def new_lifespan(app: FastAPI) -> AsyncGenerator[None]:
-                """New lifespan."""
-                async with lifespan(app), mcp_app.lifespan(app):
-                    yield
-
-            self._app.router.lifespan_context = new_lifespan
+        self._app.router.lifespan_context = mcp_app.lifespan
 
         self._app.mount(path, mcp_app)
 
