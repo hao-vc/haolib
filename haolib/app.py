@@ -11,6 +11,7 @@ from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastmcp import FastMCP
 from faststream.confluent import KafkaBroker
+from starlette.types import Lifespan
 from uvicorn import Config, Server
 
 from haolib.configs.observability import ObservabilityConfig
@@ -127,18 +128,20 @@ class AppBuilder:
 
         return Server(config)
 
-    async def setup_mcp(self, mcp: FastMCP, path: str) -> Self:
+    async def setup_mcp(self, mcp: FastMCP, path: str, lifespan: Lifespan | None = None) -> Self:
         """Setup MCP."""
 
         mcp_app = mcp.http_app(path=path)
 
-        @asynccontextmanager
-        async def new_lifespan(app: FastAPI) -> AsyncGenerator[None]:
-            """New lifespan."""
-            async with self._app.router.lifespan_context(app), mcp_app.lifespan(app):
-                yield
+        if lifespan is not None:
 
-        self._app.router.lifespan_context = new_lifespan
+            @asynccontextmanager
+            async def new_lifespan(app: FastAPI) -> AsyncGenerator[None]:
+                """New lifespan."""
+                async with lifespan(app), mcp_app.lifespan(app):
+                    yield
+
+            self._app.router.lifespan_context = new_lifespan
 
         self._app.mount(path, mcp_app)
 
