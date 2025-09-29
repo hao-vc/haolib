@@ -47,6 +47,7 @@ class SQLAlchemyProvider(Provider):
         async with db_session_maker() as session:
             try:
                 yield session
+                await session.commit()
             except SQLAlchemyError:
                 await session.rollback()
                 raise
