@@ -35,6 +35,7 @@ dependencies = [
     "faststream[confluent]>=0.5.48",
     "fastapi>=0.116.2",
     "fastmcp>=2.12.3",
+    "taskiq>=0.11.18",
 ]
 
 [tool.setuptools.package-data]
