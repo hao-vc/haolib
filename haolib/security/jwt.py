@@ -35,14 +35,14 @@ class JWTService:
     def encode(
         self,
         context_data: BaseModel | None = None,
-        expires_in: int | None = None,
+        expires_in: timedelta | None = None,
         additional_claims: dict[str, Any] | None = None,
     ) -> str:
         """Encode data into a JWT.
 
         Args:
             context_data: The data to encode into the JWT to the `context` field.
-            expires_in: The expiration time in minutes (optional).
+            expires_in: The expiration time (optional).
             additional_claims: Additional claims to include in the JWT payload.
 
         Returns:
@@ -55,7 +55,7 @@ class JWTService:
             payload.update(additional_claims)
 
         if expires_in is not None:
-            payload["exp"] = datetime.now(UTC) + timedelta(minutes=expires_in)
+            payload["exp"] = datetime.now(UTC) + expires_in
 
         if context_data:
             payload["context"] = context_data.model_dump(mode="json")

@@ -1,5 +1,7 @@
 """JWT config."""
 
+from datetime import timedelta
+
 from pydantic_settings import BaseSettings
 
 
@@ -8,4 +10,4 @@ class JWTConfig(BaseSettings):
 
     secret_key: str
     algorithm: str
-    expires_in: int | None = None
+    expires_in: timedelta | None = None
