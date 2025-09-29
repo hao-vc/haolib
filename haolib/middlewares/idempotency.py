@@ -1,6 +1,7 @@
 """Idempotency middleware."""
 
 from collections.abc import Awaitable, Callable
+from datetime import timedelta
 
 from fastapi import Request, Response
 from fastapi.responses import JSONResponse
@@ -16,7 +17,7 @@ REDIRECT_STATUS_CODES_UPPER_BOUND = 399
 class IdempotencyKeysStorage:
     """Idempotency keys storage."""
 
-    def __init__(self, redis: Redis, ttl: int) -> None:
+    def __init__(self, redis: Redis, ttl: timedelta) -> None:
         """Initialize the idempotency keys storage.
 
         Args:

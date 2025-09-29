@@ -1,9 +1,9 @@
 """Idempotency config."""
 
+from datetime import timedelta
+
 from pydantic import Field
 from pydantic_settings import BaseSettings
-
-FIVE_MINUTES = 60 * 5 * 1000
 
 
 class IdempotencyConfig(BaseSettings):
@@ -16,4 +16,4 @@ class IdempotencyConfig(BaseSettings):
 
     """
 
-    ttl: int = Field(default=FIVE_MINUTES, description="Time to live for the idempotency key in milliseconds.")
+    ttl: timedelta = Field(default=timedelta(minutes=5), description="Time to live for the idempotency key.")
