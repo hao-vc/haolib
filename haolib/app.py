@@ -6,15 +6,17 @@ from typing import Self
 from dishka import AsyncContainer, Scope
 from dishka.integrations.fastapi import setup_dishka as setup_dishka_fastapi
 from dishka.integrations.faststream import setup_dishka as setup_dishka_faststream
+from dishka.integrations.taskiq import setup_dishka as setup_dishka_taskiq
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastmcp import FastMCP
 from faststream.confluent import KafkaBroker
+from taskiq import AsyncBroker
 from uvicorn import Config, Server
 
 from haolib.configs.observability import ObservabilityConfig
 from haolib.configs.server import ServerConfig
-from haolib.exceptions.handler import register_exception_handlers
+from haolib.exceptions.fastapi import register_exception_handlers
 from haolib.middlewares.idempotency import (
     IdempotencyKeysStorage,
     idempotency_middleware,
@@ -39,6 +41,17 @@ class AppBuilder:
     async def setup_dishka(self) -> Self:
         """Setup dishka."""
         setup_dishka_fastapi(self._container, self._app)
+
+        return self
+
+    async def setup_taskiq(self, taskiq_broker: AsyncBroker) -> Self:
+        """Setup taskiq.
+
+        Args:
+            taskiq_broker: The taskiq broker.
+
+        """
+        setup_dishka_taskiq(self._container, taskiq_broker)
 
         return self
 
