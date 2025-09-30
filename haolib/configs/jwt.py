@@ -11,3 +11,9 @@ class JWTConfig(BaseSettings):
     secret_key: str
     algorithm: str
     expires_in: timedelta | None = None
+
+
+class JWKConfig(BaseSettings):
+    """JWK config."""
+
+    uri: str
