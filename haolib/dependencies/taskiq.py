@@ -14,8 +14,8 @@ class TaskiqProvider(Provider):
 
     @provide(scope=Scope.APP)
     async def taskiq_async_worker_with_scheduler(
-        self, taskiq_broker: AsyncBroker, taskiq_source: ScheduleSource, taskiq_config: TaskiqConfig
+        self, taskiq_broker: AsyncBroker, taskiq_sources: list[ScheduleSource], taskiq_config: TaskiqConfig
     ) -> AsyncGenerator[TaskiqAsyncWorkerWithScheduler]:
         """Get taskiq async worker with scheduler."""
-        async with TaskiqAsyncWorkerWithScheduler(taskiq_broker, taskiq_source, taskiq_config) as worker:
+        async with TaskiqAsyncWorkerWithScheduler(taskiq_broker, taskiq_sources, taskiq_config) as worker:
             yield worker

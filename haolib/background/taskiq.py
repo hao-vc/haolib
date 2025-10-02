@@ -17,16 +17,18 @@ logger = logging.getLogger(__name__)
 class TaskiqAsyncWorkerWithScheduler:
     """Taskiq worker."""
 
-    def __init__(self, taskiq_broker: AsyncBroker, taskiq_source: ScheduleSource, taskiq_config: TaskiqConfig) -> None:
+    def __init__(
+        self, taskiq_broker: AsyncBroker, taskiq_sources: list[ScheduleSource], taskiq_config: TaskiqConfig
+    ) -> None:
         """Initialize taskiq worker."""
 
         self._broker = taskiq_broker
 
-        self._taskiq_source = taskiq_source
+        self._taskiq_sources = taskiq_sources
 
         self._taskiq_config = taskiq_config
 
-        self._scheduler = TaskiqScheduler(broker=self._broker, sources=[self._taskiq_source])
+        self._scheduler = TaskiqScheduler(broker=self._broker, sources=self._taskiq_sources)
 
     async def startup(self) -> None:
         """Startup."""
