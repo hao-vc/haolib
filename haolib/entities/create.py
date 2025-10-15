@@ -3,13 +3,10 @@
 from __future__ import annotations
 
 import abc
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from haolib.batches.entities import EntityBatch
 from haolib.entities.base import BaseEntity
-
-if TYPE_CHECKING:
-    from collections.abc import Sequence
 
 
 class BaseEntityCreate[T_Id, T_Entity: BaseEntity]:
@@ -23,7 +20,7 @@ class BaseEntityCreate[T_Id, T_Entity: BaseEntity]:
 class BaseBulkEntityCreate[T_Id, T_Entity: BaseEntity, T_EntityCreate: BaseEntityCreate]:
     """Base bulk entity create."""
 
-    entities: Sequence[T_EntityCreate]
+    entities: list[T_EntityCreate]
 
     @abc.abstractmethod
     async def create_batch(self, *args: Any, **kwargs: Any) -> EntityBatch[T_Id, T_Entity]:

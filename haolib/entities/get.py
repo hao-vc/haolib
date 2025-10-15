@@ -3,13 +3,10 @@
 from __future__ import annotations
 
 import abc
-from typing import TYPE_CHECKING, Any, Self
+from typing import Any, Self
 
 from haolib.batches.entities import EntityBatch
 from haolib.entities.base import BaseEntity, HasId
-
-if TYPE_CHECKING:
-    from collections.abc import Sequence
 
 
 class BaseEntityGet[T_Id, T_Entity: BaseEntity](HasId[T_Id]):
@@ -24,7 +21,7 @@ class BaseEntityGet[T_Id, T_Entity: BaseEntity](HasId[T_Id]):
 class BaseBulkEntityGet[T_Id, T_Entity: BaseEntity, T_EntityGet: BaseEntityGet]:
     """Base bulk entity get."""
 
-    entities: Sequence[T_EntityGet]
+    entities: list[T_EntityGet]
 
     @classmethod
     @abc.abstractmethod

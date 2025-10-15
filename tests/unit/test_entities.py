@@ -58,7 +58,7 @@ class EntityGet(BaseEntityGet[int, Entity]):
         return cls(id=entity.id)
 
 
-class EntitiesBulkGet(BaseBulkEntityGet[int, Entity]):
+class EntitiesBulkGet(BaseBulkEntityGet[int, Entity, EntityGet]):
     """Entities bulk get."""
 
     entities: list[EntityGet]
@@ -89,7 +89,7 @@ class EntityUpdate(BaseEntityUpdate[int, Entity]):
         return entity
 
 
-class EntitiesBulkUpdate(BaseBulkEntityUpdate[int, Entity]):
+class EntitiesBulkUpdate(BaseBulkEntityUpdate[int, Entity, EntityUpdate]):
     """Entities bulk update."""
 
     entities: list[EntityUpdate]
@@ -111,7 +111,7 @@ class EntityCreate(BaseEntityCreate[int, Entity]):
         return Entity(id=id, name=self.name)
 
 
-class EntitiesBulkCreate(BaseBulkEntityCreate[int, Entity]):
+class EntitiesBulkCreate(BaseBulkEntityCreate[int, Entity, EntityCreate]):
     """Entities bulk create."""
 
     entities: list[EntityCreate]

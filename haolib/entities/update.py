@@ -3,13 +3,10 @@
 from __future__ import annotations
 
 import abc
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from haolib.batches.entities import EntityBatch
 from haolib.entities.base import BaseEntity, HasId
-
-if TYPE_CHECKING:
-    from collections.abc import Sequence
 
 
 class BaseEntityUpdate[T_Id, T_Entity: BaseEntity](HasId[T_Id]):
@@ -23,7 +20,7 @@ class BaseEntityUpdate[T_Id, T_Entity: BaseEntity](HasId[T_Id]):
 class BaseBulkEntityUpdate[T_Id, T_Entity: BaseEntity, T_EntityUpdate: BaseEntityUpdate]:
     """Base bulk entity update."""
 
-    entities: Sequence[T_EntityUpdate]
+    entities: list[T_EntityUpdate]
 
     async def update_batch(
         self,
