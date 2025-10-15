@@ -16,13 +16,30 @@ class EntityBatch[T_Id, T_Entity: BaseEntity](BaseBatch[T_Id, T_Entity]):
         self._entities: dict[T_Id, T_Entity] = {}
         self._entities_list_indexed: list[T_Id] = []
 
+        self._index = 0
+
         for entity in data:
             self._entities[entity.id] = entity
             self._entities_list_indexed.append(entity.id)
 
-    async def __iter__(self) -> Iterator[T_Entity]:
+    def __iter__(self) -> Iterator[T_Entity]:
         """Iterate over the batch."""
-        return iter(self._entities.values())
+
+        self._index = 0
+
+        return self
+
+    def __next__(self) -> T_Entity:
+        """Return the next item in the batch."""
+
+        if self._index >= len(self._entities_list_indexed):
+            raise StopIteration
+
+        result = self._entities[self._entities_list_indexed[self._index]]
+
+        self._index += 1
+
+        return result
 
     async def add_dict_data(self, data: dict[T_Id, T_Entity]) -> Self:
         """Return the batch from a dict."""
