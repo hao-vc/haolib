@@ -64,6 +64,10 @@ class EntityBatch[T_Id, T_Entity: BaseEntity](BaseBatch[T_Id, T_Entity]):
 
         return self._entities[self._entities_list_indexed[0]]
 
+    async def get_ids(self) -> set[T_Id]:
+        """Return the ids of the batch."""
+        return set(self._entities.keys())
+
     async def get_size(self) -> int:
         """Return the size of the batch."""
 
