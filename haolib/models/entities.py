@@ -22,3 +22,7 @@ class EntityModel[T_Id, T_Entity: BaseEntity](AbstractModel):
     @abc.abstractmethod
     def to_entity(self) -> T_Entity:
         """Convert the model to an entity."""
+
+    @abc.abstractmethod
+    def update_from_entity(self, entity: T_Entity) -> Self:
+        """Update the model from an entity."""
