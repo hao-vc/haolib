@@ -20,10 +20,10 @@ class BaseEntityUpdate[T_Id, T_Entity: BaseEntity](HasId[T_Id]):
         """Update entity."""
 
 
-class BaseBulkEntityUpdate[T_Id, T_Entity: BaseEntity]:
+class BaseBulkEntityUpdate[T_Id, T_Entity: BaseEntity, T_EntityUpdate: BaseEntityUpdate]:
     """Base bulk entity update."""
 
-    entities: Sequence[BaseEntityUpdate[T_Id, T_Entity]]
+    entities: Sequence[T_EntityUpdate]
 
     async def update_batch(
         self,

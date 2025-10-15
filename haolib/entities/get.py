@@ -21,10 +21,10 @@ class BaseEntityGet[T_Id, T_Entity: BaseEntity](HasId[T_Id]):
         """Get entity get from entity."""
 
 
-class BaseBulkEntityGet[T_Id, T_Entity: BaseEntity]:
+class BaseBulkEntityGet[T_Id, T_Entity: BaseEntity, T_EntityGet: BaseEntityGet]:
     """Base bulk entity get."""
 
-    entities: Sequence[T_Entity]
+    entities: Sequence[T_EntityGet]
 
     @classmethod
     @abc.abstractmethod

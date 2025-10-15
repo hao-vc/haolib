@@ -20,10 +20,10 @@ class BaseEntityCreate[T_Id, T_Entity: BaseEntity]:
         """Create entity."""
 
 
-class BaseBulkEntityCreate[T_Id, T_Entity: BaseEntity]:
+class BaseBulkEntityCreate[T_Id, T_Entity: BaseEntity, T_EntityCreate: BaseEntityCreate]:
     """Base bulk entity create."""
 
-    entities: Sequence[BaseEntityCreate[T_Id, T_Entity]]
+    entities: Sequence[T_EntityCreate]
 
     @abc.abstractmethod
     async def create_batch(self, *args: Any, **kwargs: Any) -> EntityBatch[T_Id, T_Entity]:
