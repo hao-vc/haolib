@@ -52,6 +52,11 @@ class EntityGet(BaseEntityGet[int, Entity]):
         """Hash the entity."""
         return hash((self.id,))
 
+    @classmethod
+    async def from_entity(cls, entity: Entity) -> Self:
+        """Get entity get from entity."""
+        return cls(id=entity.id)
+
 
 class EntitiesBulkGet(BaseBulkEntityGet[int, Entity]):
     """Entities bulk get."""
