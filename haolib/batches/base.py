@@ -1,10 +1,19 @@
 """Base interface for batches."""
 
+from collections.abc import Iterator
 from typing import Protocol, Self
 
 
 class BaseBatch[T_Id, T](Protocol):
     """Base interface for batches."""
+
+    def __iter__(self) -> Iterator[T]:
+        """Iterate over the batch."""
+        ...
+
+    def __next__(self) -> T:
+        """Return the next item in the batch."""
+        ...
 
     async def add_dict_data(self, data: dict[T_Id, T]) -> Self:
         """Return the batch from a dict.
@@ -72,6 +81,15 @@ class BaseBatch[T_Id, T](Protocol):
 
         Raises:
             exception: If the batch is empty.
+
+        """
+        ...
+
+    async def get_ids(self) -> set[T_Id]:
+        """Get the ids of the batch.
+
+        Returns:
+            set[T_Id]: The ids of the batch.
 
         """
         ...

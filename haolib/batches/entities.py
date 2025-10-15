@@ -86,6 +86,10 @@ class EntityBatch[T_Id, T_Entity: BaseEntity](BaseBatch[T_Id, T_Entity]):
 
         return self._entities[self._entities_list_indexed[0]]
 
+    async def get_by_id(self, id: T_Id) -> T_Entity:
+        """Return the item by id."""
+        return self._entities[id]
+
     async def get_ids(self) -> set[T_Id]:
         """Return the ids of the batch."""
         return set(self._entities.keys())
