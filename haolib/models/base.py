@@ -12,7 +12,7 @@ from sqlalchemy.orm import DeclarativeBase
 from haolib.entities.base import BaseEntity
 
 
-class AbstractModel[T_Id](DeclarativeBase):
+class AbstractModel[T_Id, T_Entity: BaseEntity](DeclarativeBase):
     """Base abstract model for database entities.
 
     Provides common functionality for all database models, including
@@ -82,9 +82,9 @@ class AbstractModel[T_Id](DeclarativeBase):
 
     @classmethod
     @abc.abstractmethod
-    def from_entity(cls, entity: BaseEntity[T_Id]) -> Self:
+    def from_entity(cls, entity: T_Entity) -> Self:
         """Create a model instance from an entity."""
 
     @abc.abstractmethod
-    def to_entity(self) -> BaseEntity[T_Id]:
+    def to_entity(self) -> T_Entity:
         """Convert the model to an entity."""
