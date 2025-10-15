@@ -79,23 +79,3 @@ class ModelWithDateTimeMixin:
         server_default=func.now(),
         onupdate=func.now(),
     )
-
-
-def get_entity_mixin(
-    get_uuid_function: Callable[[], UUID] | None = None,
-    created_at_default: Callable[[], datetime] | None = None,
-    updated_at_default: Callable[[], datetime] | None = None,
-) -> Any:
-    """Get a entity mixin."""
-    return type(
-        "EntityModelMixin",
-        (get_custom_id_mixin(get_uuid_function), get_custom_date_time_mixin(created_at_default, updated_at_default)),
-        {},
-    )
-
-
-class EntityModelMixin(ModelWithIdMixin, ModelWithDateTimeMixin):
-    """Entity mixin.
-
-    Adds id and created_at and updated_at columns to the model.
-    """
