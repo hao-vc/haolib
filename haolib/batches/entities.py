@@ -1,5 +1,6 @@
 """Native batches."""
 
+from collections.abc import Iterator
 from typing import Self
 
 from haolib.batches.base import BaseBatch
@@ -18,6 +19,10 @@ class EntityBatch[T_Id, T_Entity: BaseEntity](BaseBatch[T_Id, T_Entity]):
         for entity in data:
             self._entities[entity.id] = entity
             self._entities_list_indexed.append(entity.id)
+
+    async def __iter__(self) -> Iterator[T_Entity]:
+        """Iterate over the batch."""
+        return iter(self._entities.values())
 
     async def add_dict_data(self, data: dict[T_Id, T_Entity]) -> Self:
         """Return the batch from a dict."""
