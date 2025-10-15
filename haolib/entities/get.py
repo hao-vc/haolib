@@ -15,6 +15,10 @@ if TYPE_CHECKING:
 class BaseEntityGet[T_Id, T_Entity: BaseEntity](HasId[T_Id]):
     """Base entity get."""
 
+    @abc.abstractmethod
+    async def from_entity(self, entity: T_Entity, *args: Any, **kwargs: Any) -> Self:
+        """Get entity get from entity."""
+
 
 class BaseBulkEntityGet[T_Id, T_Entity: BaseEntity]:
     """Base bulk entity get."""
