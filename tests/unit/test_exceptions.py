@@ -3,7 +3,7 @@
 import pytest
 
 from haolib.exceptions.base import AbstractException, BadRequestException, NotFoundException
-from haolib.exceptions.handler import to_error_schema
+from haolib.exceptions.fastapi import to_error_schema
 
 
 class NotFoundExceptionForTest(NotFoundException):

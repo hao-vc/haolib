@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from fastmcp import FastMCP
 from httpx import ASGITransport, AsyncClient
 from pydantic import Field
+from redis.asyncio import Redis
 
 from haolib.app import AppBuilder
 from haolib.configs.base import BaseConfig
@@ -17,7 +18,7 @@ from haolib.configs.sqlalchemy import SQLAlchemyConfig
 from haolib.dependencies.idempotency import IdempotencyProvider
 from haolib.dependencies.redis import RedisProvider
 from haolib.dependencies.sqlalchemy import SQLAlchemyProvider
-from haolib.exceptions.handler import register_exception_handlers
+from haolib.exceptions.fastapi import register_exception_handlers
 
 
 def register_exception_handlers_for_test(app: FastAPI) -> None:
@@ -62,6 +63,13 @@ class MockProvider(Provider):
 async def container() -> AsyncContainer:
     """Test container."""
     return make_async_container(MockProvider(), SQLAlchemyProvider(), RedisProvider(), IdempotencyProvider())
+
+
+@pytest_asyncio.fixture()
+async def clean_redis(container: AsyncContainer) -> None:
+    """Clean Redis for testing."""
+    async with container(scope=Scope.REQUEST) as nested_container:
+        await (await nested_container.get(Redis)).flushdb()
 
 
 @pytest_asyncio.fixture

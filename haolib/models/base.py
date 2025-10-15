@@ -4,14 +4,15 @@ This module provides the foundation for all database models in the application,
 with common methods and behaviors for consistent data handling.
 """
 
-import typing as t
-from typing import Any, ClassVar
+import abc
+from typing import Any, ClassVar, Self
 
-from pydantic import BaseModel
 from sqlalchemy.orm import DeclarativeBase
 
+from haolib.entities.base import BaseEntity
 
-class AbstractModel(DeclarativeBase):
+
+class AbstractModel[T_Id](DeclarativeBase):
     """Base abstract model for database entities.
 
     Provides common functionality for all database models, including
@@ -58,32 +59,6 @@ class AbstractModel(DeclarativeBase):
         return self.__dict__
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> t.Self:
-        """Create a model instance from a dictionary.
-
-        Args:
-            data: Dictionary containing attribute values
-
-        Returns:
-            A new instance of the model
-
-        """
-        return cls(**data)
-
-    @classmethod
-    def from_schema(cls, model: BaseModel) -> t.Self:
-        """Create a model instance from a Pydantic schema.
-
-        Args:
-            model: A Pydantic model instance
-
-        Returns:
-            A new instance of the database model
-
-        """
-        return cls.from_dict(model.model_dump())
-
-    @classmethod
     def _get_primary_keys(cls) -> list[str]:
         """Get the names of the model's primary key columns.
 
@@ -104,3 +79,12 @@ class AbstractModel(DeclarativeBase):
 
         """
         return getattr(self, name)
+
+    @classmethod
+    @abc.abstractmethod
+    def from_entity(cls, entity: BaseEntity[T_Id]) -> Self:
+        """Create a model instance from an entity."""
+
+    @abc.abstractmethod
+    def to_entity(self) -> BaseEntity[T_Id]:
+        """Convert the model to an entity."""

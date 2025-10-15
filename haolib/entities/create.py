@@ -1,0 +1,32 @@
+"""Entities create."""
+
+from __future__ import annotations
+
+import abc
+from typing import TYPE_CHECKING, Any
+
+from haolib.batches.entities import EntityBatch
+from haolib.entities.base import BaseEntity
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+
+class BaseEntityCreate[T_Id, T_Entity: BaseEntity]:
+    """Base entity create."""
+
+    @abc.abstractmethod
+    async def create_entity(self, *args: Any, **kwargs: Any) -> T_Entity:
+        """Create entity."""
+
+
+class BaseBulkEntityCreate[T_Id, T_Entity: BaseEntity]:
+    """Base bulk entity create."""
+
+    entities: Sequence[BaseEntityCreate[T_Id, T_Entity]]
+
+    @abc.abstractmethod
+    async def create_batch(self, *args: Any, **kwargs: Any) -> EntityBatch[T_Id, T_Entity]:
+        """Create entities."""
+
+        return EntityBatch([await entity_create.create_entity() for entity_create in self.entities])

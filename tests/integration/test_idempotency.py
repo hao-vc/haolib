@@ -6,7 +6,7 @@ from httpx import AsyncClient
 
 
 @pytest.mark.asyncio
-async def test_idempotency(app: FastAPI, test_client: AsyncClient) -> None:
+async def test_idempotency(clean_redis: None, app: FastAPI, test_client: AsyncClient) -> None:
     """Test idempotency."""
 
     @app.post("/api/orders")
