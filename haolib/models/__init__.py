@@ -6,6 +6,5 @@ and behavior.
 """
 
 from haolib.models.base import AbstractModel
-from haolib.models.entities import EntityModel
 
-__all__ = ["AbstractModel", "EntityModel"]
+__all__ = ["AbstractModel"]
