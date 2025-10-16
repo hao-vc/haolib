@@ -12,7 +12,7 @@ from haolib.entities.base import BaseEntity
 from haolib.models.entities import BaseEntityModel
 
 
-class SQLAlchemyEntityModelBatch[T_Id, T_Model: BaseEntityModel](BaseBatch[T_Id, T_Model]):
+class SQLAlchemyEntityModelBatch[T_Id, T_Model: BaseEntityModel, T_Entity: BaseEntity](BaseBatch[T_Id, T_Model]):
     """SQLAlchemy entity model batch."""
 
     def __init__(self, session: AsyncSession) -> None:
@@ -145,7 +145,7 @@ class SQLAlchemyEntityModelBatch[T_Id, T_Model: BaseEntityModel](BaseBatch[T_Id,
         return self
 
     def from_entity_batch(
-        self, entity_batch: EntityBatch[T_Id, BaseEntity[T_Id]], model_class: type[T_Model], *args: Any, **kwargs: Any
+        self, entity_batch: EntityBatch[T_Id, T_Entity], model_class: type[T_Model], *args: Any, **kwargs: Any
     ) -> Self:
         """Return the batch from entity batch."""
 
@@ -155,7 +155,7 @@ class SQLAlchemyEntityModelBatch[T_Id, T_Model: BaseEntityModel](BaseBatch[T_Id,
 
         return self
 
-    def to_entity_batch(self, *args: Any, **kwargs: Any) -> EntityBatch[T_Id, BaseEntity[T_Id]]:
+    def to_entity_batch(self, *args: Any, **kwargs: Any) -> EntityBatch[T_Id, T_Entity]:
         """Return the entity batch from model batch."""
 
         return EntityBatch(
