@@ -1,7 +1,7 @@
 """Models for entities."""
 
 import abc
-from typing import TYPE_CHECKING, Self
+from typing import TYPE_CHECKING, ClassVar, Self
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Mapped
@@ -12,6 +12,8 @@ from haolib.models.base import AbstractModel
 
 class EntityModel[T_Id, T_Entity: BaseEntity](AbstractModel):
     """Model for entities."""
+
+    __abstract__: ClassVar[bool] = True
 
     if TYPE_CHECKING:
         id: Mapped[T_Id]
