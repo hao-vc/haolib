@@ -22,8 +22,7 @@ class BaseBulkEntityCreate[T_Id, T_Entity: BaseEntity, T_EntityCreate: BaseEntit
 
     entities: list[T_EntityCreate]
 
-    @abc.abstractmethod
-    async def create_batch(self, *args: Any, **kwargs: Any) -> EntityBatch[T_Id, T_Entity]:
+    async def create_batch(self, *args: Any, **kwargs: Any) -> EntityBatch[T_Id, T_Entity]:  # noqa: ARG002
         """Create entities."""
 
         return EntityBatch([await entity_create.create_entity() for entity_create in self.entities])
