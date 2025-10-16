@@ -3,8 +3,6 @@
 import abc
 from typing import Self
 
-from sqlalchemy.orm import Mapped
-
 from haolib.entities.base import BaseEntity
 from haolib.models.base import AbstractModel
 
@@ -12,7 +10,7 @@ from haolib.models.base import AbstractModel
 class EntityModel[T_Id, T_Entity: BaseEntity](AbstractModel):
     """Model for entities."""
 
-    id: Mapped[T_Id]
+    id: T_Id
 
     @classmethod
     @abc.abstractmethod
