@@ -3,7 +3,7 @@
 from collections.abc import Iterator
 from typing import Any, Self
 
-from sqlalchemy import ScalarResult, Select
+from sqlalchemy import ScalarResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from haolib.batches.base import BaseBatch
@@ -105,33 +105,11 @@ class SQLAlchemyEntityModelBatch[T_Id, T_Model: BaseEntityModel, T_Entity: BaseE
 
         return len(self._models)
 
-    async def add_batch_to_db(self) -> Self:
-        """Add the batch to the database.
-
-        This method uses AsyncSession.merge to add the batch to the database.
-        """
+    async def merge_batch_to_db(self) -> Self:
+        """Merge the batch to the database."""
 
         for model in self._models.values():
             await self._session.merge(model)
-
-        return self
-
-    async def update_batch_in_db(self, select_query: Select[tuple[T_Model]]) -> Self:
-        """Update the batch in the database.
-
-        Unexisting models will be ignored.
-
-        This method uses AsyncSession.execute to get the models from the database
-        and then uses AsyncSession.merge to update the batch in the database.
-        """
-
-        models = (await self._session.execute(select_query)).scalars().all()
-
-        for model in models:
-            await self._session.merge(model)
-
-        for model in self._models.values():
-            self._models[model.id] = model
 
         return self
 
@@ -141,6 +119,14 @@ class SQLAlchemyEntityModelBatch[T_Id, T_Model: BaseEntityModel, T_Entity: BaseE
         for scalar in scalars.all():
             self._models[scalar.id] = scalar
             self._models_list_indexed.append(scalar.id)
+
+        return self
+
+    def update_from_entity_batch(self, entity_batch: EntityBatch[T_Id, T_Entity], *args: Any, **kwargs: Any) -> Self:
+        """Update the batch from entity batch."""
+
+        for entity in entity_batch:
+            self._models[entity.id] = self._models[entity.id].update_from_entity(entity, *args, **kwargs)
 
         return self
 
