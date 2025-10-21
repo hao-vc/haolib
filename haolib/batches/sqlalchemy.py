@@ -15,10 +15,9 @@ from haolib.models.entities import BaseEntityModel
 class SQLAlchemyEntityModelBatch[T_Id, T_Model: BaseEntityModel, T_Entity: BaseEntity](BaseBatch[T_Id, T_Model]):
     """SQLAlchemy entity model batch."""
 
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(self) -> None:
         """Initialize the batch."""
 
-        self._session: AsyncSession = session
         self._models_list_indexed: list[T_Id] = []
         self._models: dict[T_Id, T_Model] = {}
         self._index = 0
@@ -105,11 +104,11 @@ class SQLAlchemyEntityModelBatch[T_Id, T_Model: BaseEntityModel, T_Entity: BaseE
 
         return len(self._models)
 
-    async def merge_batch_to_db(self) -> Self:
+    async def merge_batch_to_db(self, session: AsyncSession) -> Self:
         """Merge the batch to the database."""
 
         for model in self._models.values():
-            await self._session.merge(model)
+            await session.merge(model)
 
         return self
 
