@@ -27,72 +27,65 @@ class Entity(BaseEntity[int]):
 
 
 @pytest.mark.asyncio
-async def test_entity_batch() -> None:
-    """Test entity batch."""
-    batch: EntityBatch[int, Entity] = EntityBatch([Entity(id=1), Entity(id=2), Entity(id=3)])
-    assert await batch.to_list() == [Entity(id=1), Entity(id=2), Entity(id=3)]
-
-
-@pytest.mark.asyncio
 async def test_entity_batch_add_dict_data() -> None:
     """Test entity batch add dict data."""
-    batch: EntityBatch[int, Entity] = EntityBatch([Entity(id=1), Entity(id=2), Entity(id=3)])
-    assert await batch.to_list() == [Entity(id=1), Entity(id=2), Entity(id=3)]
+    batch = EntityBatch[int, Entity]().merge_dict({1: Entity(id=1), 2: Entity(id=2), 3: Entity(id=3)})
+    assert batch.to_dict() == {1: Entity(id=1), 2: Entity(id=2), 3: Entity(id=3)}
 
 
 @pytest.mark.asyncio
 async def test_entity_batch_add_list_data() -> None:
     """Test entity batch add list data."""
-    batch: EntityBatch[int, Entity] = EntityBatch([Entity(id=1), Entity(id=2), Entity(id=3)])
-    assert await batch.to_list() == [Entity(id=1), Entity(id=2), Entity(id=3)]
+    batch = EntityBatch[int, Entity]().merge_list([Entity(id=1), Entity(id=2), Entity(id=3)])
+    assert batch.to_list() == [Entity(id=1), Entity(id=2), Entity(id=3)]
 
 
 @pytest.mark.asyncio
 async def test_entity_batch_add_set_data() -> None:
     """Test entity batch add set data."""
-    batch: EntityBatch[int, Entity] = EntityBatch([Entity(id=1), Entity(id=2), Entity(id=3)])
-    assert await batch.to_list() == [Entity(id=1), Entity(id=2), Entity(id=3)]
+    batch = EntityBatch[int, Entity]().merge_set({Entity(id=1), Entity(id=2), Entity(id=3)})
+    assert batch.to_list() == [Entity(id=1), Entity(id=2), Entity(id=3)]
 
 
 @pytest.mark.asyncio
 async def test_entity_batch_to_dict() -> None:
     """Test entity batch to dict."""
-    batch: EntityBatch[int, Entity] = EntityBatch([Entity(id=1), Entity(id=2), Entity(id=3)])
-    assert await batch.to_dict() == {1: Entity(id=1), 2: Entity(id=2), 3: Entity(id=3)}
+    batch = EntityBatch[int, Entity]().merge_list([Entity(id=1), Entity(id=2), Entity(id=3)])
+    assert batch.to_dict() == {1: Entity(id=1), 2: Entity(id=2), 3: Entity(id=3)}
 
 
 @pytest.mark.asyncio
 async def test_entity_batch_to_list() -> None:
     """Test entity batch to list."""
-    batch: EntityBatch[int, Entity] = EntityBatch([Entity(id=1), Entity(id=2), Entity(id=3)])
-    assert await batch.to_list() == [Entity(id=1), Entity(id=2), Entity(id=3)]
+    batch = EntityBatch[int, Entity]().merge_list([Entity(id=1), Entity(id=2), Entity(id=3)])
+    assert batch.to_list() == [Entity(id=1), Entity(id=2), Entity(id=3)]
 
 
 @pytest.mark.asyncio
 async def test_entity_batch_to_set() -> None:
     """Test entity batch to set."""
-    batch: EntityBatch[int, Entity] = EntityBatch([Entity(id=1), Entity(id=2), Entity(id=3)])
-    assert await batch.to_set() == {Entity(id=1), Entity(id=2), Entity(id=3)}
+    batch = EntityBatch[int, Entity]().merge_list([Entity(id=1), Entity(id=2), Entity(id=3)])
+    assert batch.to_set() == {Entity(id=1), Entity(id=2), Entity(id=3)}
 
 
 @pytest.mark.asyncio
 async def test_entity_batch_get_first() -> None:
     """Test entity batch get first."""
-    batch: EntityBatch[int, Entity] = EntityBatch([Entity(id=1), Entity(id=2), Entity(id=3)])
-    assert await batch.get_first(Exception) == Entity(id=1)
+    batch = EntityBatch[int, Entity]().merge_list([Entity(id=1), Entity(id=2), Entity(id=3)])
+    assert batch.get_by_index(0, exception=Exception) == Entity(id=1)
 
 
 @pytest.mark.asyncio
 async def test_entity_batch_get_size() -> None:
     """Test entity batch get size."""
-    batch: EntityBatch[int, Entity] = EntityBatch([Entity(id=1), Entity(id=2), Entity(id=3)])
+    batch = EntityBatch[int, Entity]().merge_list([Entity(id=1), Entity(id=2), Entity(id=3)])
     batch_size = 3
-    assert await batch.get_size() == batch_size
+    assert len(batch) == batch_size
 
 
 @pytest.mark.asyncio
 async def test_entity_batch_get_unique_size() -> None:
     """Test entity batch get unique size."""
-    batch: EntityBatch[int, Entity] = EntityBatch([Entity(id=1), Entity(id=2), Entity(id=3)])
+    batch = EntityBatch[int, Entity]().merge_list([Entity(id=1), Entity(id=2), Entity(id=3)])
     batch_size = 3
-    assert await batch.get_unique_size() == batch_size
+    assert len(batch) == batch_size

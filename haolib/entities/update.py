@@ -25,9 +25,14 @@ class BaseBulkEntityUpdate[T_Id, T_Entity: BaseEntity, T_EntityUpdate: BaseEntit
     async def update_batch(
         self,
         batch: EntityBatch[T_Id, T_Entity],
-        *args: Any,  # noqa: ARG002
-        **kwargs: Any,  # noqa: ARG002
+        *args: Any,
+        **kwargs: Any,
     ) -> EntityBatch[T_Id, T_Entity]:
         """Update entities."""
 
-        return EntityBatch([await entity.update_entity((await batch.to_dict())[entity.id]) for entity in self.entities])
+        return EntityBatch().merge_list(
+            [
+                await entity.update_entity(batch.get_by_key(entity.id, exception=ValueError), *args, **kwargs)
+                for entity in self.entities
+            ]
+        )

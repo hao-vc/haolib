@@ -69,7 +69,7 @@ class EntitiesBulkGet(BaseBulkEntityGet[int, Entity, EntityGet]):
     @classmethod
     async def from_batch(cls, batch: EntityBatch[int, Entity]) -> Self:
         """Get entities bulk get from batch."""
-        return cls(entities=[EntityGet(id=entity.id) for entity in await batch.to_list()])
+        return cls(entities=[EntityGet(id=entity.id) for entity in batch.to_list()])
 
 
 class EntityUpdate(BaseEntityUpdate[int, Entity]):
@@ -121,7 +121,7 @@ class EntitiesBulkCreate(BaseBulkEntityCreate[int, Entity, EntityCreate]):
 
     async def create_batch(self) -> EntityBatch[int, Entity]:
         """Create batch."""
-        return EntityBatch[int, Entity](
+        return EntityBatch[int, Entity]().merge_list(
             [await entity_create.create_entity(id=index + 1) for index, entity_create in enumerate(self.entities)]
         )
 
@@ -136,7 +136,9 @@ async def test_entity_get() -> None:
 @pytest.mark.asyncio
 async def test_entities_bulk_get() -> None:
     """Test entities bulk get."""
-    batch = EntityBatch[int, Entity]([Entity(id=1, name="test"), Entity(id=2, name="test"), Entity(id=3, name="test")])
+    batch = EntityBatch[int, Entity]().merge_list(
+        [Entity(id=1, name="test"), Entity(id=2, name="test"), Entity(id=3, name="test")]
+    )
     entities_bulk_get = await EntitiesBulkGet.from_batch(batch)
     assert entities_bulk_get.entities == [EntityGet(id=1), EntityGet(id=2), EntityGet(id=3)]
 
@@ -144,22 +146,24 @@ async def test_entities_bulk_get() -> None:
 @pytest.mark.asyncio
 async def test_entities_bulk_update() -> None:
     """Test entities bulk update."""
-    batch = EntityBatch[int, Entity]([Entity(id=1, name="test"), Entity(id=2, name="test"), Entity(id=3, name="test")])
+    batch = EntityBatch[int, Entity]().merge_list(
+        [Entity(id=1, name="test"), Entity(id=2, name="test"), Entity(id=3, name="test")]
+    )
     update_batch = EntitiesBulkUpdate(
         entities=[EntityUpdate(id=1, name="test2"), EntityUpdate(id=2, name="test2"), EntityUpdate(id=3, name="test2")]
     )
     updated_batch = await update_batch.update_batch(batch)
-    assert await updated_batch.to_list() == [
+    assert updated_batch.to_list() == [
         Entity(id=1, name="test2"),
         Entity(id=2, name="test2"),
         Entity(id=3, name="test2"),
     ]
-    assert await updated_batch.to_dict() == {
+    assert updated_batch.to_dict() == {
         1: Entity(id=1, name="test2"),
         2: Entity(id=2, name="test2"),
         3: Entity(id=3, name="test2"),
     }
-    assert await updated_batch.to_set() == {
+    assert updated_batch.to_set() == {
         Entity(id=1, name="test2"),
         Entity(id=2, name="test2"),
         Entity(id=3, name="test2"),
@@ -173,7 +177,7 @@ async def test_entities_bulk_create() -> None:
         entities=[EntityCreate(name="test"), EntityCreate(name="test"), EntityCreate(name="test")]
     )
     created_batch = await create_batch.create_batch()
-    assert await created_batch.to_list() == [
+    assert created_batch.to_list() == [
         Entity(id=1, name="test"),
         Entity(id=2, name="test"),
         Entity(id=3, name="test"),
