@@ -10,7 +10,7 @@ from haolib.entities.base import BaseEntity
 class EntityBatch[T_Id, T_Entity: BaseEntity](BaseBatch[T_Id, T_Entity]):
     """Entity batch."""
 
-    def __init__(self, data: list[T_Entity]) -> None:
+    def __init__(self, data: list[T_Entity] | None = None) -> None:
         """Initialize the batch."""
 
         self._entities: dict[T_Id, T_Entity] = {}
@@ -18,9 +18,10 @@ class EntityBatch[T_Id, T_Entity: BaseEntity](BaseBatch[T_Id, T_Entity]):
 
         self._index = 0
 
-        for entity in data:
-            self._entities[entity.id] = entity
-            self._entities_list_indexed.append(entity.id)
+        if data is not None:
+            for entity in data:
+                self._entities[entity.id] = entity
+                self._entities_list_indexed.append(entity.id)
 
     def __iter__(self) -> Iterator[T_Entity]:
         """Iterate over the batch."""

@@ -15,15 +15,16 @@ from haolib.models.entities import BaseEntityModel
 class SQLAlchemyEntityModelBatch[T_Id, T_Model: BaseEntityModel, T_Entity: BaseEntity](BaseBatch[T_Id, T_Model]):
     """SQLAlchemy entity model batch."""
 
-    def __init__(self, data: list[T_Model]) -> None:
+    def __init__(self, data: list[T_Model] | None = None) -> None:
         """Initialize the batch."""
 
         self._models_list_indexed: list[T_Id] = []
         self._models: dict[T_Id, T_Model] = {}
 
-        for model in data:
-            self._models[model.id] = model
-            self._models_list_indexed.append(model.id)
+        if data is not None:
+            for model in data:
+                self._models[model.id] = model
+                self._models_list_indexed.append(model.id)
 
         self._index = 0
 
