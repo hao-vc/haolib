@@ -6,11 +6,10 @@ from typing import TYPE_CHECKING, Any, ClassVar, Self
 if TYPE_CHECKING:
     from sqlalchemy.orm import Mapped
 
-from haolib.entities.base import BaseEntity
 from haolib.models.base import AbstractModel
 
 
-class BaseEntityModel[T_Id, T_Entity: BaseEntity](AbstractModel):
+class BaseEntityModel[T_Id, T_Entity](AbstractModel):
     """Model for entities."""
 
     __abstract__: ClassVar[bool] = True
