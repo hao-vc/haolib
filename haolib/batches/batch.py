@@ -1,9 +1,11 @@
 """Batch."""
 
-from collections.abc import Callable, Iterator
-from typing import Self, overload
+from typing import TYPE_CHECKING, Self, overload
 
 from haolib.batches.base import BaseBatch
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterator
 
 
 class Batch[T_Key, T_Value](BaseBatch[T_Key, T_Value]):

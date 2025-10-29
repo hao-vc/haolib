@@ -5,16 +5,14 @@ description = "A Python utility library with common components for building appl
 readme = "README.md"
 authors = [{ name = "Kamil Biktimirov" }]
 keywords = ["fastapi", "backend", "utilities", "microservices", "observability"]
-requires-python = ">=3.13"
+requires-python = ">=3.14"
 dependencies = [
-    "aiogram>=3.21.0",
     "aiohttp>=3.12.15",
     "alembic>=1.16.4",
     "asyncpg>=0.30.0",
     "bcrypt>=4.3.0",
     "cryptography>=45.0.6",
     "dishka>=1.6.0",
-    "fastapi-idempotent>=0.0.3",
     "httpx>=0.28.1",
     "opentelemetry-distro>=0.57b0",
     "opentelemetry-exporter-otlp-proto-grpc>=1.36.0",
@@ -24,7 +22,6 @@ dependencies = [
     "opentelemetry-instrumentation-faststream>=0.1.3",
     "opentelemetry-instrumentation-httpx>=0.57b0",
     "opentelemetry-instrumentation-logging>=0.57b0",
-    "pydantic-settings>=2.10.1",
     "pyjwt[crypto]>=2.10.1",
     "redis>=6.4.0",
     "sentry-sdk>=2.35.0",
@@ -33,9 +30,10 @@ dependencies = [
     "uvicorn>=0.35.0",
     "uvloop>=0.21.0",
     "faststream[confluent]>=0.5.48",
-    "fastapi>=0.116.2",
-    "fastmcp>=2.12.3",
-    "taskiq>=0.11.18",
+    "fastapi>=0.120.1",
+    "fastmcp>=2.13.0.2",
+    "taskiq>=0.11.19",
+    "taskiq-redis>=1.1.2",
 ]
 
 [tool.setuptools.package-data]
@@ -43,7 +41,7 @@ dependencies = [
 
 
 [tool.ruff]
-target-version = "py313"
+target-version = "py314"
 line-length = 120
 
 # Disable fix for unused imports (`F401`).
@@ -74,8 +72,14 @@ lint.ignore = [
     "COM812",  # missing-trailing-comma
     "FBT001",  # boolean-type-hint-positional-argument
     "FBT002",  # boolean-default-value-positional-argument
+    "TC001",   # typing-only-first-party-import
+    "TC002",   # typing-only-third-party-import
+    "TC003",   # typing-only-standard-library-import
 ]
 
+
+[tool.mypy]
+python_version = "3.14"
 
 [tool.coverage.run]
 # We need *__dishka_factory* here to be excluded because it is a generated file by dishka.

@@ -1,14 +1,17 @@
 """FastAPI observability."""
 
 import logging
+from typing import TYPE_CHECKING
 
 import sentry_sdk
-from fastapi import FastAPI
 from opentelemetry import trace
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 
 from haolib.configs.observability import ObservabilityConfig
 from haolib.observability.setup import setup_observability
+
+if TYPE_CHECKING:
+    from fastapi import FastAPI
 
 
 def configure_uvicorn_logging() -> None:

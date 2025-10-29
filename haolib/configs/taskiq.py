@@ -46,5 +46,5 @@ class TaskiqConfig(BaseSettings):
 
     """
 
-    worker: TaskiqWorkerConfig = Field(default_factory=TaskiqWorkerConfig)
-    scheduler: TaskiqSchedulerConfig = Field(default_factory=TaskiqSchedulerConfig)
+    worker: TaskiqWorkerConfig | None = Field(default=None)
+    scheduler: TaskiqSchedulerConfig | None = Field(default=None)

@@ -9,7 +9,6 @@ from httpx import ASGITransport, AsyncClient
 from pydantic import Field
 from redis.asyncio import Redis
 
-from haolib.app import AppBuilder
 from haolib.configs.base import BaseConfig
 from haolib.configs.idempotency import IdempotencyConfig
 from haolib.configs.observability import ObservabilityConfig
@@ -18,6 +17,8 @@ from haolib.configs.sqlalchemy import SQLAlchemyConfig
 from haolib.dependencies.idempotency import IdempotencyProvider
 from haolib.dependencies.redis import RedisProvider
 from haolib.dependencies.sqlalchemy import SQLAlchemyProvider
+from haolib.entrypoints.fastapi import FastAPIEntrypoint
+from haolib.entrypoints.fastmcp import FastMCPEntrypoint
 from haolib.exceptions.fastapi import register_exception_handlers
 
 
@@ -75,21 +76,25 @@ async def clean_redis(container: AsyncContainer) -> None:
 @pytest_asyncio.fixture
 async def app(container: AsyncContainer) -> FastAPI:
     """Test app."""
-    app_builder = AppBuilder(container, FastAPI())
-    await app_builder.setup_dishka()
-    await app_builder.setup_exception_handlers(should_observe_exceptions=False)
-    await app_builder.setup_idempotency_middleware()
-    return await app_builder.get_app()
+    return (
+        FastAPIEntrypoint(app=FastAPI())
+        .setup_dishka(container)
+        .setup_exception_handlers(should_observe_exceptions=False)
+        .setup_idempotency_middleware()
+        .get_app()
+    )
 
 
 @pytest_asyncio.fixture
 async def app_with_observability(container: AsyncContainer) -> FastAPI:
     """Test app."""
-    app_builder = AppBuilder(container, FastAPI())
-    await app_builder.setup_dishka()
-    await app_builder.setup_exception_handlers(should_observe_exceptions=True)
-    await app_builder.setup_idempotency_middleware()
-    return await app_builder.get_app()
+    return (
+        FastAPIEntrypoint(app=FastAPI())
+        .setup_dishka(container)
+        .setup_exception_handlers(should_observe_exceptions=True)
+        .setup_idempotency_middleware()
+        .get_app()
+    )
 
 
 @pytest_asyncio.fixture
@@ -97,17 +102,21 @@ async def app_with_mcp_and_mcp(container: AsyncContainer) -> tuple[FastAPI, Fast
     """Test app."""
 
     app = FastAPI()
-    app_builder = AppBuilder(container=container, app=app)
+    fastapi_entrypoint = (
+        FastAPIEntrypoint(app=FastAPI())
+        .setup_dishka(container)
+        .setup_exception_handlers(should_observe_exceptions=False)
+        .setup_idempotency_middleware()
+    )
 
     @app.post("/hello")
     async def hello(body: Request) -> str:
         return "hello"
 
-    await app_builder.setup_dishka()
-    await app_builder.setup_exception_handlers(should_observe_exceptions=False)
-    fast_mcp = FastMCP.from_fastapi(app=app)
-    await app_builder.setup_mcp(fast_mcp, "/mcp")
-    return await app_builder.get_app(), fast_mcp
+    fastmcp_entrypoint = FastMCPEntrypoint(fastmcp=FastMCP.from_fastapi(app=app))
+    fastapi_entrypoint.setup_mcp(fastmcp_entrypoint, "/mcp")
+
+    return fastapi_entrypoint.get_app(), fastmcp_entrypoint.get_app()
 
 
 @pytest_asyncio.fixture

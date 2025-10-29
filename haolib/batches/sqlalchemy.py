@@ -1,23 +1,29 @@
 """SQLAlchemy batches."""
 
-from typing import Any, Self
-
-from sqlalchemy import ScalarResult
-from sqlalchemy.ext.asyncio import AsyncSession
+from typing import TYPE_CHECKING, Any, Self
 
 from haolib.batches.batch import Batch
 from haolib.batches.entities import EntityBatch
 from haolib.entities.base import BaseEntity
 from haolib.models.entities import BaseEntityModel
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from sqlalchemy import ScalarResult
+    from sqlalchemy.ext.asyncio import AsyncSession
+
 
 class SQLAlchemyEntityModelBatch[T_Id, T_Model: BaseEntityModel, T_Entity: BaseEntity](Batch[T_Id, T_Model]):
     """SQLAlchemy entity model batch."""
 
-    def __init__(self) -> None:
+    def __init__(
+        self, model_class: type[T_Model], key_getter: Callable[[T_Model], T_Id] = lambda model: model.id
+    ) -> None:
         """Initialize the batch."""
 
-        super().__init__(lambda model: model.id)
+        super().__init__(key_getter)
+        self._model_class = model_class
 
     async def merge_batch_to_db(self, session: AsyncSession) -> Self:
         """Merge the batch to the database."""
@@ -42,12 +48,10 @@ class SQLAlchemyEntityModelBatch[T_Id, T_Model: BaseEntityModel, T_Entity: BaseE
 
         return self
 
-    def from_entity_batch(
-        self, entity_batch: EntityBatch[T_Id, T_Entity], model_class: type[T_Model], *args: Any, **kwargs: Any
-    ) -> Self:
+    def from_entity_batch(self, entity_batch: EntityBatch[T_Id, T_Entity], *args: Any, **kwargs: Any) -> Self:
         """Return the batch from entity batch."""
 
-        self.merge_list([model_class.from_entity(entity, *args, **kwargs) for entity in entity_batch])
+        self.merge_list([self._model_class.from_entity(entity, *args, **kwargs) for entity in entity_batch])
 
         return self
 

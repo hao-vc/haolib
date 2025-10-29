@@ -1,9 +1,9 @@
 """Test exception."""
 
+from typing import TYPE_CHECKING
+
 import pytest
 from fastapi import FastAPI, status
-from fastapi.testclient import TestClient
-from httpx import AsyncClient
 
 from haolib.exceptions.base import (
     AbstractException,
@@ -20,6 +20,10 @@ from haolib.exceptions.base import (
     UnprocessableContentException,
 )
 from haolib.utils.typography import to_constant_case
+
+if TYPE_CHECKING:
+    from fastapi.testclient import TestClient
+    from httpx import AsyncClient
 
 
 class BadRequestExceptionForTest(BadRequestException):

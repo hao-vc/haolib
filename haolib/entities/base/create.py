@@ -1,11 +1,13 @@
 """Entities create."""
 
 import abc
-from collections.abc import Iterable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from haolib.batches.entities import EntityBatch
 from haolib.entities.base import BaseEntity
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 
 class BaseEntityCreate[T_Id, T_Entity: BaseEntity]:

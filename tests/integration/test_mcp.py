@@ -1,12 +1,15 @@
 """Test MCP."""
 
 import json
+from typing import TYPE_CHECKING
 
 import pytest
-from fastapi import FastAPI
-from fastmcp import FastMCP
 from fastmcp.client import Client
 from mcp.types import TextContent
+
+if TYPE_CHECKING:
+    from fastapi import FastAPI
+    from fastmcp import FastMCP
 
 
 @pytest.mark.asyncio

@@ -1,12 +1,16 @@
 """Taskiq dependencies."""
 
-from collections.abc import AsyncGenerator
+from typing import TYPE_CHECKING
 
 from dishka import Provider, Scope, provide
-from taskiq import AsyncBroker, ScheduleSource
 
 from haolib.background.taskiq import TaskiqAsyncWorkerWithScheduler
 from haolib.configs.taskiq import TaskiqConfig
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator
+
+    from taskiq import AsyncBroker, ScheduleSource
 
 
 class TaskiqProvider(Provider):

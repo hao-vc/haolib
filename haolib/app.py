@@ -1,17 +1,12 @@
 """Application builder."""
 
-from collections.abc import Awaitable, Callable
-from typing import Self
+from typing import TYPE_CHECKING, Self
 
 from dishka import AsyncContainer, Scope
 from dishka.integrations.fastapi import setup_dishka as setup_dishka_fastapi
 from dishka.integrations.faststream import setup_dishka as setup_dishka_faststream
 from dishka.integrations.taskiq import setup_dishka as setup_dishka_taskiq
-from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastmcp import FastMCP
-from faststream.confluent import KafkaBroker
-from taskiq import AsyncBroker
 from uvicorn import Config, Server
 
 from haolib.configs.observability import ObservabilityConfig
@@ -22,6 +17,27 @@ from haolib.middlewares.idempotency import (
     idempotency_middleware,
 )
 from haolib.observability.fastapi import setup_observability_for_fastapi
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
+    from fastapi import FastAPI, Request, Response
+    from fastmcp import FastMCP
+    from faststream.confluent import KafkaBroker
+    from taskiq import AsyncBroker
+
+
+class HAO:
+    """HAO app."""
+
+    def __init__(self) -> None:
+        """Initialize the Humanless Autonomously Orchestrated app.
+
+        Args:
+            container: The container.
+            app: The FastAPI app.
+
+        """
 
 
 class AppBuilder:

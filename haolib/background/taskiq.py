@@ -3,8 +3,7 @@
 import asyncio
 import contextlib
 import logging
-from types import TracebackType
-from typing import Self
+from typing import TYPE_CHECKING, Self
 
 from taskiq import AsyncBroker, ScheduleSource, TaskiqScheduler
 from taskiq.api import run_receiver_task, run_scheduler_task
@@ -12,6 +11,9 @@ from taskiq.api import run_receiver_task, run_scheduler_task
 from haolib.configs.taskiq import TaskiqConfig
 
 logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    from types import TracebackType
 
 
 class TaskiqAsyncWorkerWithScheduler:
