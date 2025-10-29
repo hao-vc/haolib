@@ -50,8 +50,11 @@ class FastAPIEntrypoint(Entrypoint):
 
         return self
 
-    def setup_cors_middleware(self, cors_config: CORSConfig) -> Self:
+    def setup_cors_middleware(self, cors_config: CORSConfig | None = None) -> Self:
         """Setup CORS middleware."""
+        if cors_config is None:
+            cors_config = CORSConfig()
+
         self._app.add_middleware(
             CORSMiddleware,
             allow_origins=cors_config.allow_origins,
