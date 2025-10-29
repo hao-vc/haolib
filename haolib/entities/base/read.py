@@ -1,6 +1,4 @@
-"""Entities get."""
-
-from __future__ import annotations
+"""Entities read."""
 
 import abc
 from typing import Any, Self
@@ -9,21 +7,19 @@ from haolib.batches.entities import EntityBatch
 from haolib.entities.base import BaseEntity, HasId
 
 
-class BaseEntityGet[T_Id, T_Entity: BaseEntity](HasId[T_Id]):
-    """Base entity get."""
+class BaseEntityRead[T_Id, T_Entity: BaseEntity](HasId[T_Id]):
+    """Base entity read."""
 
     @classmethod
     @abc.abstractmethod
     async def from_entity(cls, entity: T_Entity, *args: Any, **kwargs: Any) -> Self:
-        """Get entity get from entity."""
+        """Get entity read from entity."""
 
 
-class BaseBulkEntityGet[T_Id, T_Entity: BaseEntity, T_EntityGet: BaseEntityGet]:
-    """Base bulk entity get."""
-
-    entities: list[T_EntityGet]
+class BaseBulkEntityRead[T_Id, T_Entity: BaseEntity, T_EntityRead: BaseEntityRead]:
+    """Base bulk entity read."""
 
     @classmethod
     @abc.abstractmethod
     async def from_batch(cls, batch: EntityBatch[T_Id, T_Entity], *args: Any, **kwargs: Any) -> Self:
-        """Get bulk entity get from batch."""
+        """Get bulk entity read from batch."""

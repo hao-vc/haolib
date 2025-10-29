@@ -1,8 +1,7 @@
 """Entities create."""
 
-from __future__ import annotations
-
 import abc
+from collections.abc import Iterable
 from typing import Any
 
 from haolib.batches.entities import EntityBatch
@@ -14,17 +13,19 @@ class BaseEntityCreate[T_Id, T_Entity: BaseEntity]:
 
     @abc.abstractmethod
     async def create_entity(self, *args: Any, **kwargs: Any) -> T_Entity:
-        """Create entity."""
+        """Create entity and return the created entity."""
 
 
 class BaseBulkEntityCreate[T_Id, T_Entity: BaseEntity, T_EntityCreate: BaseEntityCreate]:
     """Base bulk entity create."""
 
-    entities: list[T_EntityCreate]
+    @abc.abstractmethod
+    async def get_entities(self) -> Iterable[T_EntityCreate]:
+        """Get entities to create."""
 
     async def create_batch(self, *args: Any, **kwargs: Any) -> EntityBatch[T_Id, T_Entity]:
-        """Create entities."""
+        """Create entities and return batch of the created entities."""
 
-        return EntityBatch().merge_list(
-            [await entity_create.create_entity(*args, **kwargs) for entity_create in self.entities]
+        return EntityBatch[T_Id, T_Entity]().merge_list(
+            [await entity_create.create_entity(*args, **kwargs) for entity_create in await self.get_entities()]
         )

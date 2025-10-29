@@ -5,10 +5,24 @@ from typing import Self
 import pytest
 
 from haolib.batches.entities import EntityBatch
-from haolib.entities.base import BaseEntity
-from haolib.entities.create import BaseBulkEntityCreate, BaseEntityCreate
-from haolib.entities.get import BaseBulkEntityGet, BaseEntityGet
-from haolib.entities.update import BaseBulkEntityUpdate, BaseEntityUpdate
+from haolib.entities.base import (
+    BaseEntity,
+)
+from haolib.entities.base.create import BaseBulkEntityCreate, BaseEntityCreate
+from haolib.entities.base.read import BaseBulkEntityRead, BaseEntityRead
+from haolib.entities.base.update import BaseBulkEntityUpdate, BaseEntityUpdate
+
+
+class CounterGenerator:
+    """Counter generator."""
+
+    def __init__(self) -> None:
+        self.counter = 0
+
+    def generate(self) -> int:
+        """Generate a new counter."""
+        self.counter += 1
+        return self.counter
 
 
 class Entity(BaseEntity[int]):
@@ -33,8 +47,8 @@ class Entity(BaseEntity[int]):
         return hash((self.id,))
 
 
-class EntityGet(BaseEntityGet[int, Entity]):
-    """Entity get."""
+class EntityRead(BaseEntityRead[int, Entity]):
+    """Entity read."""
 
     id: int
 
@@ -43,7 +57,7 @@ class EntityGet(BaseEntityGet[int, Entity]):
 
     def __eq__(self, value: object) -> bool:
         """Check if the entity is equal to another entity."""
-        if not isinstance(value, EntityGet):
+        if not isinstance(value, EntityRead):
             return False
 
         return self.id == value.id
@@ -54,22 +68,22 @@ class EntityGet(BaseEntityGet[int, Entity]):
 
     @classmethod
     async def from_entity(cls, entity: Entity) -> Self:
-        """Get entity get from entity."""
+        """Get entity read from entity."""
         return cls(id=entity.id)
 
 
-class EntitiesBulkGet(BaseBulkEntityGet[int, Entity, EntityGet]):
-    """Entities bulk get."""
+class EntitiesBulkRead(BaseBulkEntityRead[int, Entity, EntityRead]):
+    """Entities bulk read."""
 
-    entities: list[EntityGet]
+    entities: list[EntityRead]
 
-    def __init__(self, entities: list[EntityGet]) -> None:
+    def __init__(self, entities: list[EntityRead]) -> None:
         self.entities = entities
 
     @classmethod
     async def from_batch(cls, batch: EntityBatch[int, Entity]) -> Self:
-        """Get entities bulk get from batch."""
-        return cls(entities=[EntityGet(id=entity.id) for entity in batch.to_list()])
+        """Get entities bulk read from batch."""
+        return cls(entities=[EntityRead(id=entity.id) for entity in batch.to_list()])
 
 
 class EntityUpdate(BaseEntityUpdate[int, Entity]):
@@ -83,7 +97,7 @@ class EntityUpdate(BaseEntityUpdate[int, Entity]):
         self.name = name
 
     async def update_entity(self, entity: Entity) -> Entity:
-        """Update entity."""
+        """Update entity and return the updated entity."""
         entity.name = self.name
 
         return entity
@@ -97,6 +111,10 @@ class EntitiesBulkUpdate(BaseBulkEntityUpdate[int, Entity, EntityUpdate]):
     def __init__(self, entities: list[EntityUpdate]) -> None:
         self.entities = entities
 
+    async def get_entities(self) -> list[EntityUpdate]:
+        """Get entities."""
+        return self.entities
+
 
 class EntityCreate(BaseEntityCreate[int, Entity]):
     """Entity create."""
@@ -106,9 +124,9 @@ class EntityCreate(BaseEntityCreate[int, Entity]):
     def __init__(self, name: str) -> None:
         self.name = name
 
-    async def create_entity(self, id: int) -> Entity:
+    async def create_entity(self, id_generator: CounterGenerator) -> Entity:
         """Create entity."""
-        return Entity(id=id, name=self.name)
+        return Entity(id=id_generator.generate(), name=self.name)
 
 
 class EntitiesBulkCreate(BaseBulkEntityCreate[int, Entity, EntityCreate]):
@@ -119,28 +137,26 @@ class EntitiesBulkCreate(BaseBulkEntityCreate[int, Entity, EntityCreate]):
     def __init__(self, entities: list[EntityCreate]) -> None:
         self.entities = entities
 
-    async def create_batch(self) -> EntityBatch[int, Entity]:
-        """Create batch."""
-        return EntityBatch[int, Entity]().merge_list(
-            [await entity_create.create_entity(id=index + 1) for index, entity_create in enumerate(self.entities)]
-        )
+    async def get_entities(self) -> list[EntityCreate]:
+        """Get entities."""
+        return self.entities
 
 
 @pytest.mark.asyncio
-async def test_entity_get() -> None:
-    """Test entity get."""
-    entity = EntityGet(id=1)
+async def test_entity_read() -> None:
+    """Test entity read."""
+    entity = EntityRead(id=1)
     assert entity.id == 1
 
 
 @pytest.mark.asyncio
-async def test_entities_bulk_get() -> None:
-    """Test entities bulk get."""
+async def test_entities_bulk_read() -> None:
+    """Test entities bulk read."""
     batch = EntityBatch[int, Entity]().merge_list(
         [Entity(id=1, name="test"), Entity(id=2, name="test"), Entity(id=3, name="test")]
     )
-    entities_bulk_get = await EntitiesBulkGet.from_batch(batch)
-    assert entities_bulk_get.entities == [EntityGet(id=1), EntityGet(id=2), EntityGet(id=3)]
+    entities_bulk_read = await EntitiesBulkRead.from_batch(batch)
+    assert entities_bulk_read.entities == [EntityRead(id=1), EntityRead(id=2), EntityRead(id=3)]
 
 
 @pytest.mark.asyncio
@@ -172,11 +188,12 @@ async def test_entities_bulk_update() -> None:
 
 @pytest.mark.asyncio
 async def test_entities_bulk_create() -> None:
-    """Test entities bulk create."""
+    """Test entities bulk create and return batch of the created entities."""
     create_batch = EntitiesBulkCreate(
         entities=[EntityCreate(name="test"), EntityCreate(name="test"), EntityCreate(name="test")]
     )
-    created_batch = await create_batch.create_batch()
+    id_generator = CounterGenerator()
+    created_batch = await create_batch.create_batch(id_generator)
     assert created_batch.to_list() == [
         Entity(id=1, name="test"),
         Entity(id=2, name="test"),

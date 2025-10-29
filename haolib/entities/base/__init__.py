@@ -1,4 +1,4 @@
-"""Base entity."""
+"""Entities base."""
 
 import abc
 from datetime import datetime

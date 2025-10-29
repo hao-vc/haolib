@@ -1,8 +1,7 @@
 """Entities update."""
 
-from __future__ import annotations
-
 import abc
+from collections.abc import Iterable
 from typing import Any
 
 from haolib.batches.entities import EntityBatch
@@ -14,13 +13,15 @@ class BaseEntityUpdate[T_Id, T_Entity: BaseEntity](HasId[T_Id]):
 
     @abc.abstractmethod
     async def update_entity(self, entity: T_Entity, *args: Any, **kwargs: Any) -> T_Entity:
-        """Update entity."""
+        """Update entity and return the updated entity."""
 
 
 class BaseBulkEntityUpdate[T_Id, T_Entity: BaseEntity, T_EntityUpdate: BaseEntityUpdate]:
     """Base bulk entity update."""
 
-    entities: list[T_EntityUpdate]
+    @abc.abstractmethod
+    async def get_entities(self) -> Iterable[T_EntityUpdate]:
+        """Get entities to update."""
 
     async def update_batch(
         self,
@@ -28,11 +29,11 @@ class BaseBulkEntityUpdate[T_Id, T_Entity: BaseEntity, T_EntityUpdate: BaseEntit
         *args: Any,
         **kwargs: Any,
     ) -> EntityBatch[T_Id, T_Entity]:
-        """Update entities."""
+        """Update entities in batch and return the updated batch."""
 
-        return EntityBatch().merge_list(
+        return EntityBatch[T_Id, T_Entity]().merge_list(
             [
                 await entity.update_entity(batch.get_by_key(entity.id, exception=ValueError), *args, **kwargs)
-                for entity in self.entities
+                for entity in await self.get_entities()
             ]
         )
