@@ -28,9 +28,11 @@ class AbstractUpdateableFrom[T_From](Protocol):
         ...
 
 
-class AbstractMappedModel[T_MappedTo](AbstractCreatableFrom[T_MappedTo], AbstractConvertable[T_MappedTo]):
+class AbstractMappedModel[T_MappedTo](AbstractCreatableFrom[T_MappedTo], AbstractConvertable[T_MappedTo], Protocol):
     """Abstract mapped model."""
 
 
-class AbstractUpdateableMappedModel[T_MappedTo](AbstractMappedModel[T_MappedTo], AbstractUpdateableFrom[T_MappedTo]):
+class AbstractUpdateableMappedModel[T_MappedTo](
+    AbstractMappedModel[T_MappedTo], AbstractUpdateableFrom[T_MappedTo], Protocol
+):
     """Abstract updateable mapped model."""
