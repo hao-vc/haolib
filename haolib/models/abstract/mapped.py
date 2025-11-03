@@ -3,7 +3,7 @@
 from typing import Any, Protocol, Self
 
 
-class BaseCreatableFrom[T_From](Protocol):
+class AbstractCreatableFrom[T_From](Protocol):
     """Model for creatable from mapped."""
 
     @classmethod
@@ -12,7 +12,7 @@ class BaseCreatableFrom[T_From](Protocol):
         ...
 
 
-class BaseConvertable[T_To](Protocol):
+class AbstractConvertable[T_To](Protocol):
     """Model for convertable."""
 
     def convert(self, *args: Any, **kwargs: Any) -> T_To:
@@ -20,7 +20,7 @@ class BaseConvertable[T_To](Protocol):
         ...
 
 
-class BaseUpdateableFrom[T_From](Protocol):
+class AbstractUpdateableFrom[T_From](Protocol):
     """Model for updatable from mapped."""
 
     def update_from(self, from_value: T_From, *args: Any, **kwargs: Any) -> Self:
@@ -28,9 +28,9 @@ class BaseUpdateableFrom[T_From](Protocol):
         ...
 
 
-class BaseMappedModel[T_MappedTo](BaseCreatableFrom[T_MappedTo], BaseConvertable[T_MappedTo]):
+class BaseMappedModel[T_MappedTo](AbstractCreatableFrom[T_MappedTo], AbstractConvertable[T_MappedTo]):
     """Mapped model."""
 
 
-class BaseUpdateableMappedModel[T_MappedTo](BaseMappedModel[T_MappedTo], BaseUpdateableFrom[T_MappedTo]):
+class BaseUpdateableMappedModel[T_MappedTo](BaseMappedModel[T_MappedTo], AbstractUpdateableFrom[T_MappedTo]):
     """Updateable mapped model."""
