@@ -4,7 +4,7 @@ from typing import Any, Protocol, Self
 
 
 class AbstractCreatableFrom[T_From](Protocol):
-    """Model for creatable from mapped."""
+    """Abstract model for creatable from mapped."""
 
     @classmethod
     def create_from(cls, from_value: T_From, *args: Any, **kwargs: Any) -> Self:
@@ -13,7 +13,7 @@ class AbstractCreatableFrom[T_From](Protocol):
 
 
 class AbstractConvertable[T_To](Protocol):
-    """Model for convertable."""
+    """Abstract model for convertable."""
 
     def convert(self, *args: Any, **kwargs: Any) -> T_To:
         """Convert the model."""
@@ -21,16 +21,16 @@ class AbstractConvertable[T_To](Protocol):
 
 
 class AbstractUpdateableFrom[T_From](Protocol):
-    """Model for updatable from mapped."""
+    """Abstract model for updatable from mapped."""
 
     def update_from(self, from_value: T_From, *args: Any, **kwargs: Any) -> Self:
         """Update the model from a from value."""
         ...
 
 
-class BaseMappedModel[T_MappedTo](AbstractCreatableFrom[T_MappedTo], AbstractConvertable[T_MappedTo]):
-    """Mapped model."""
+class AbstractMappedModel[T_MappedTo](AbstractCreatableFrom[T_MappedTo], AbstractConvertable[T_MappedTo]):
+    """Abstract mapped model."""
 
 
-class BaseUpdateableMappedModel[T_MappedTo](BaseMappedModel[T_MappedTo], AbstractUpdateableFrom[T_MappedTo]):
-    """Updateable mapped model."""
+class AbstractUpdateableMappedModel[T_MappedTo](AbstractMappedModel[T_MappedTo], AbstractUpdateableFrom[T_MappedTo]):
+    """Abstract updateable mapped model."""

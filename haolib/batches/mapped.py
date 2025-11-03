@@ -4,13 +4,13 @@ from typing import TYPE_CHECKING, Any, Self
 
 from haolib.batches.abstract import AbstractBatch
 from haolib.batches.batch import Batch
-from haolib.models.base.mapped import BaseMappedModel, BaseUpdateableMappedModel
+from haolib.models.abstract.mapped import AbstractMappedModel, AbstractUpdateableMappedModel
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
 
-class MappedBatch[T_Key, T_Mapped: BaseMappedModel, T_MappedTo](Batch[T_Key, T_Mapped]):
+class MappedBatch[T_Key, T_Mapped: AbstractMappedModel, T_MappedTo](Batch[T_Key, T_Mapped]):
     """Mapped model batch."""
 
     def __init__(
@@ -41,9 +41,7 @@ class MappedBatch[T_Key, T_Mapped: BaseMappedModel, T_MappedTo](Batch[T_Key, T_M
 
         return self
 
-    def merge_to_batch(
-        self, batch: AbstractBatch[T_Key, T_MappedTo], *args: Any, **kwargs: Any
-    ) -> AbstractBatch[T_Key, T_MappedTo]:
+    def merge_to_batch[T_Batch: AbstractBatch](self, batch: T_Batch, *args: Any, **kwargs: Any) -> T_Batch:
         """Merge the values from this batch to the given batch.
 
         Args:
@@ -61,7 +59,7 @@ class MappedBatch[T_Key, T_Mapped: BaseMappedModel, T_MappedTo](Batch[T_Key, T_M
         )
 
 
-class UpdateableMappedBatch[T_Key, T_Mapped: BaseUpdateableMappedModel, T_MappedTo](
+class UpdateableMappedBatch[T_Key, T_Mapped: AbstractUpdateableMappedModel, T_MappedTo](
     MappedBatch[T_Key, T_Mapped, T_MappedTo]
 ):
     """Updateable from mapped batch."""
