@@ -4,7 +4,7 @@ import abc
 from typing import Any, Protocol, Self
 
 
-class AbstractCreatableFrom[T_From](Protocol):
+class BaseCreatableFrom[T_From](Protocol):
     """Model for creatable from mapped."""
 
     @classmethod
@@ -13,7 +13,7 @@ class AbstractCreatableFrom[T_From](Protocol):
         """Create a model instance from a from value."""
 
 
-class AbstractConvertable[T_To](Protocol):
+class BaseConvertable[T_To](Protocol):
     """Model for convertable."""
 
     @abc.abstractmethod
@@ -21,7 +21,7 @@ class AbstractConvertable[T_To](Protocol):
         """Convert the model."""
 
 
-class AbstractUpdateableFrom[T_From](Protocol):
+class BaseUpdateableFrom[T_From](Protocol):
     """Model for updatable from mapped."""
 
     @abc.abstractmethod
@@ -29,9 +29,9 @@ class AbstractUpdateableFrom[T_From](Protocol):
         """Update the model from a from value."""
 
 
-class AbstractMappedModel[T_MappedTo](AbstractCreatableFrom[T_MappedTo], AbstractConvertable[T_MappedTo]):
+class BaseMappedModel[T_MappedTo](BaseCreatableFrom[T_MappedTo], BaseConvertable[T_MappedTo]):
     """Mapped model."""
 
 
-class AbstractUpdateableMappedModel[T_MappedTo](AbstractMappedModel[T_MappedTo], AbstractUpdateableFrom[T_MappedTo]):
+class BaseUpdateableMappedModel[T_MappedTo](BaseMappedModel[T_MappedTo], BaseUpdateableFrom[T_MappedTo]):
     """Updateable mapped model."""
