@@ -4,13 +4,13 @@ from typing import TYPE_CHECKING, Any, Self
 
 from haolib.batches.abstract import AbstractBatch
 from haolib.batches.batch import Batch
-from haolib.models.abstract.mapped import AbstractMappedModel, AbstractUpdateableMappedModel
+from haolib.models.base.mapped import BaseMappedModel, BaseUpdateableMappedModel
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
 
-class MappedBatch[T_Key, T_Mapped: AbstractMappedModel, T_MappedTo](Batch[T_Key, T_Mapped]):
+class MappedBatch[T_Key, T_Mapped: BaseMappedModel, T_MappedTo](Batch[T_Key, T_Mapped]):
     """Mapped model batch."""
 
     def __init__(
@@ -61,7 +61,7 @@ class MappedBatch[T_Key, T_Mapped: AbstractMappedModel, T_MappedTo](Batch[T_Key,
         )
 
 
-class UpdateableMappedBatch[T_Key, T_Mapped: AbstractUpdateableMappedModel, T_MappedTo](
+class UpdateableMappedBatch[T_Key, T_Mapped: BaseUpdateableMappedModel, T_MappedTo](
     MappedBatch[T_Key, T_Mapped, T_MappedTo]
 ):
     """Updateable from mapped batch."""

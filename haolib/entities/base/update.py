@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
 
 
-class BaseEntityUpdate[T_Id, T_Entity: BaseEntity](HasId[T_Id]):
+class BaseEntityUpdate[T_Id, T_Entity: BaseEntity](HasId[T_Id], abc.ABC):
     """Base entity update."""
 
     @abc.abstractmethod
@@ -18,7 +18,7 @@ class BaseEntityUpdate[T_Id, T_Entity: BaseEntity](HasId[T_Id]):
         """Update entity and return the updated entity."""
 
 
-class BaseBulkEntityUpdate[T_Id, T_Entity: BaseEntity, T_EntityUpdate: BaseEntityUpdate]:
+class BaseBulkEntityUpdate[T_Id, T_Entity: BaseEntity, T_EntityUpdate: BaseEntityUpdate](abc.ABC):
     """Base bulk entity update."""
 
     @abc.abstractmethod

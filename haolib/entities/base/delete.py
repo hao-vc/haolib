@@ -6,13 +6,13 @@ from collections.abc import Iterable
 from haolib.entities.base import BaseEntity
 
 
-class BaseEntityDelete[T_Id, T_Entity: BaseEntity]:
+class BaseEntityDelete[T_Id, T_Entity: BaseEntity](abc.ABC):
     """Base entity delete."""
 
     id: T_Id
 
 
-class BaseBulkEntityDelete[T_Id, T_Entity: BaseEntity, T_EntityDelete: BaseEntityDelete]:
+class BaseBulkEntityDelete[T_Id, T_Entity: BaseEntity, T_EntityDelete: BaseEntityDelete](abc.ABC):
     """Base bulk entity delete."""
 
     @abc.abstractmethod

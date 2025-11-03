@@ -1,9 +1,10 @@
 """Entities base."""
 
+import abc
 from datetime import datetime
 
 
-class DateTimeEntity:
+class DateTimeEntity(abc.ABC):
     """DateTime mixin."""
 
     created_at: datetime

@@ -7,7 +7,7 @@ from haolib.batches.batch import Batch
 from haolib.entities.base import BaseEntity, HasId
 
 
-class BaseEntityRead[T_Id, T_Entity: BaseEntity](HasId[T_Id]):
+class BaseEntityRead[T_Id, T_Entity: BaseEntity](HasId[T_Id], abc.ABC):
     """Base entity read."""
 
     @classmethod
@@ -16,7 +16,7 @@ class BaseEntityRead[T_Id, T_Entity: BaseEntity](HasId[T_Id]):
         """Get entity read from entity."""
 
 
-class BaseBulkEntityRead[T_Id, T_Entity: BaseEntity, T_EntityRead: BaseEntityRead]:
+class BaseBulkEntityRead[T_Id, T_Entity: BaseEntity, T_EntityRead: BaseEntityRead](abc.ABC):
     """Base bulk entity read."""
 
     @classmethod

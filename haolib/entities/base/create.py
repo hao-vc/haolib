@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
 
 
-class BaseEntityCreate[T_Id, T_Entity: BaseEntity]:
+class BaseEntityCreate[T_Id, T_Entity: BaseEntity](abc.ABC):
     """Base entity create."""
 
     @abc.abstractmethod
@@ -18,7 +18,7 @@ class BaseEntityCreate[T_Id, T_Entity: BaseEntity]:
         """Create entity and return the created entity."""
 
 
-class BaseBulkEntityCreate[T_Id, T_Entity: BaseEntity, T_EntityCreate: BaseEntityCreate]:
+class BaseBulkEntityCreate[T_Id, T_Entity: BaseEntity, T_EntityCreate: BaseEntityCreate](abc.ABC):
     """Base bulk entity create."""
 
     @abc.abstractmethod
