@@ -11,10 +11,11 @@ if TYPE_CHECKING:
     from datetime import datetime
 
 
-class IdModel[T_Id: UUID]:
+class SQLAlchemyIdModel[T_Id: UUID]:
     """ID model mixin.
 
     Adds an ID column to the model. It is a UUID column with a default value of randomly generated UUID.
+
     """
 
     id: Mapped[T_Id] = mapped_column(
@@ -24,10 +25,11 @@ class IdModel[T_Id: UUID]:
     )
 
 
-class DateTimeModel:
+class SQLAlchemyDateTimeModel:
     """DateTime model mixin.
 
     Adds created_at and updated_at columns to the model. It is a DateTime column with a default value of func.now.
+
     """
 
     created_at: Mapped[datetime] = mapped_column(

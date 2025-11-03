@@ -5,98 +5,98 @@ from typing import TYPE_CHECKING
 import pytest
 from fastapi import FastAPI, status
 
-from haolib.exceptions.base import (
-    AbstractException,
-    BadRequestException,
-    ConflictException,
-    ForbiddenException,
-    InternalServerErrorException,
-    MethodNotAllowedException,
-    NotFoundException,
-    NotImplementedException,
-    ServiceUnavailableException,
-    TooManyRequestsException,
-    UnauthorizedException,
-    UnprocessableContentException,
+from haolib.exceptions.fastapi.base import (
+    FastAPIBadRequestException,
+    FastAPIBaseException,
+    FastAPIConflictException,
+    FastAPIForbiddenException,
+    FastAPIInternalServerErrorException,
+    FastAPIMethodNotAllowedException,
+    FastAPINotFoundException,
+    FastAPINotImplementedException,
+    FastAPIServiceUnavailableException,
+    FastAPITooManyRequestsException,
+    FastAPIUnauthorizedException,
+    FastAPIUnprocessableContentException,
 )
-from haolib.utils.typography import to_constant_case
+from haolib.utils.strings import to_constant_case
 
 if TYPE_CHECKING:
     from fastapi.testclient import TestClient
     from httpx import AsyncClient
 
 
-class BadRequestExceptionForTest(BadRequestException):
+class BadRequestExceptionForTest(FastAPIBadRequestException):
     """Test exception."""
 
     detail = "Test exception"
     additional_info = {"test": "test"}
 
 
-class UnauthorizedExceptionForTest(UnauthorizedException):
+class UnauthorizedExceptionForTest(FastAPIUnauthorizedException):
     """Test exception."""
 
     detail = "Test exception"
     additional_info = {"test": "test"}
 
 
-class ForbiddenExceptionForTest(ForbiddenException):
+class ForbiddenExceptionForTest(FastAPIForbiddenException):
     """Test exception."""
 
     detail = "Test exception"
     additional_info = {"test": "test"}
 
 
-class NotFoundExceptionForTest(NotFoundException):
+class NotFoundExceptionForTest(FastAPINotFoundException):
     """Test exception."""
 
     detail = "Test exception"
     additional_info = {"test": "test"}
 
 
-class MethodNotAllowedExceptionForTest(MethodNotAllowedException):
+class MethodNotAllowedExceptionForTest(FastAPIMethodNotAllowedException):
     """Test exception."""
 
     detail = "Test exception"
     additional_info = {"test": "test"}
 
 
-class ConflictExceptionForTest(ConflictException):
+class ConflictExceptionForTest(FastAPIConflictException):
     """Test exception."""
 
     detail = "Test exception"
     additional_info = {"test": "test"}
 
 
-class UnprocessableEntityExceptionForTest(UnprocessableContentException):
+class UnprocessableEntityExceptionForTest(FastAPIUnprocessableContentException):
     """Test exception."""
 
     detail = "Test exception"
     additional_info = {"test": "test"}
 
 
-class TooManyRequestsExceptionForTest(TooManyRequestsException):
+class TooManyRequestsExceptionForTest(FastAPITooManyRequestsException):
     """Test exception."""
 
     detail = "Test exception"
     additional_info = {"test": "test"}
 
 
-class InternalServerErrorExceptionForTest(InternalServerErrorException):
+class InternalServerErrorExceptionForTest(FastAPIInternalServerErrorException):
     """Test exception."""
 
     detail = "Test exception"
     additional_info = {"test": "test"}
 
 
-class NotImplementedExceptionForTest(NotImplementedException):
+class NotImplementedExceptionForTest(FastAPINotImplementedException):
     """Test exception."""
 
     detail = "Test exception"
     additional_info = {"test": "test"}
 
 
-class ServiceUnavailableExceptionForTest(ServiceUnavailableException):
+class ServiceUnavailableExceptionForTest(FastAPIServiceUnavailableException):
     """Test exception."""
 
     detail = "Test exception"
@@ -119,7 +119,7 @@ class ServiceUnavailableExceptionForTest(ServiceUnavailableException):
         ServiceUnavailableExceptionForTest,
     ],
 )
-async def test_exception(app: FastAPI, test_client: AsyncClient, exception: type[AbstractException]) -> None:
+async def test_exception(app: FastAPI, test_client: AsyncClient, exception: type[FastAPIBaseException]) -> None:
     """Test exception."""
 
     @app.get("/test")
@@ -171,33 +171,6 @@ async def test_irregular_exceptions_with_observability(
         raise IrregularException
 
     response = test_client_without_raise_server_exceptions_with_observability.get("/test")
-
-    assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
-    assert response.json() == {
-        "detail": "Unknown exception occurred",
-        "error_code": "UNKNOWN_EXCEPTION",
-        "additional_info": {},
-    }
-
-
-class InternalException(AbstractException):
-    """Internal exception."""
-
-    is_public = False
-
-
-@pytest.mark.asyncio
-async def test_irregular_exceptions_public_exception(
-    app: FastAPI, test_client_without_raise_server_exceptions: TestClient
-) -> None:
-    """Test irregular exceptions public exception."""
-
-    @app.get("/test")
-    def handler() -> None:
-        """Handler."""
-        raise InternalException
-
-    response = test_client_without_raise_server_exceptions.get("/test")
 
     assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
     assert response.json() == {

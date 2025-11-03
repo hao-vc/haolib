@@ -2,26 +2,20 @@
 
 from asyncio import TaskGroup
 
-from haolib.entrypoints.base import Entrypoint
+from haolib.entrypoints.abstract import AbstractEntrypoint
 
 
 class HAO:
     """HAO app."""
 
     def __init__(self) -> None:
-        """Initialize the Humanless Autonomously Orchestrated app.
+        """Initialize the Humanlessly Autonomously Orchestrated app."""
 
-        Args:
-            container: The container.
-            app: The FastAPI app.
-
-        """
-
-    async def run_entrypoints(self, entrypoints: list[Entrypoint]) -> None:
+    async def run_entrypoints(self, entrypoints: list[AbstractEntrypoint]) -> None:
         """Run the entrypoints.
 
         Args:
-            entrypoints: The entrypoints to run.
+            entrypoints: The entrypoints to run. Must implement the AbstractEntrypoint protocol.
 
         """
 

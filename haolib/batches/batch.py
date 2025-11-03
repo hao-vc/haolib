@@ -2,19 +2,21 @@
 
 from typing import TYPE_CHECKING, Self, overload
 
-from haolib.batches.base import BaseBatch
+from haolib.batches.abstract import AbstractBatch
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
 
 
-class Batch[T_Key, T_Value](BaseBatch[T_Key, T_Value]):
-    """Entity batch."""
+class Batch[T_Key, T_Value](AbstractBatch[T_Key, T_Value]):
+    """Batch."""
+
+    key_getter: Callable[[T_Value], T_Key]
 
     def __init__(self, key_getter: Callable[[T_Value], T_Key]) -> None:
         """Initialize the batch."""
 
-        self._key_getter = key_getter
+        self.key_getter = key_getter
 
         self._values_dict_indexed: dict[T_Key, int] = {}
         self._values: list[T_Value] = []
@@ -58,7 +60,7 @@ class Batch[T_Key, T_Value](BaseBatch[T_Key, T_Value]):
         """Return the batch from a list."""
 
         for value in data:
-            self._values_dict_indexed[self._key_getter(value)] = len(self._values)
+            self._values_dict_indexed[self.key_getter(value)] = len(self._values)
             self._values.append(value)
 
         return self
@@ -66,7 +68,7 @@ class Batch[T_Key, T_Value](BaseBatch[T_Key, T_Value]):
     def merge_set(self, data: set[T_Value]) -> Self:
         """Return the batch from a set."""
         for value in data:
-            self._values_dict_indexed[self._key_getter(value)] = len(self._values)
+            self._values_dict_indexed[self.key_getter(value)] = len(self._values)
             self._values.append(value)
 
         return self

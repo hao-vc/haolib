@@ -2,46 +2,30 @@
 
 import string
 from abc import ABCMeta
-from collections.abc import Sequence
 from logging import getLogger
-from typing import Any, TypedDict
+from typing import Any
 
 from fastapi import HTTPException, status
 
-from haolib.utils.typography import to_constant_case
+from haolib.exceptions.abstract import AbstractException
+from haolib.utils.strings import to_constant_case
 
 logger = getLogger(__name__)
 
 
-class ExceptionConfigDict(TypedDict, total=False):
-    """Exception config dict."""
-
-    detail: str | None
-    status_code: int
-    headers: dict[str, str] | None
-    log_exception: bool
-    additional_info: dict[str, Any]
-    auto_additional_info_fields: Sequence[str]
-    format_detail_from_kwargs: bool
-
-
-class ApiException(HTTPException):
-    """Base exception for API."""
-
-
-class AbstractException(ApiException, metaclass=ABCMeta):
-    """Abstract exception.
+class FastAPIBaseException(AbstractException, HTTPException, metaclass=ABCMeta):
+    """FastAPI abstract exception.
 
     All custom http exceptions must inherit from this class.
 
     Example:
     ```
-        class MyException(AbstractException):
+        class MyException(FastAPIBaseException):
             status_code = status_codes.HTTP_400_BAD_REQUEST
             detail = "My custom exception"
             headers = {"X-Error": "There goes my error"}
 
-        class MyExceptionWithInit(AbstractException):
+        class MyExceptionWithInit(FastAPIBaseException):
             def __init__(
                 self,
                 detail: str = "My custom exception",
@@ -160,73 +144,73 @@ class AbstractException(ApiException, metaclass=ABCMeta):
 # Define base exceptions for specific HTTP status_codes codes.
 # Usage: class MyDomainException(DomainException, NotFoundException): pass
 # Order is important here, please see the comment in AbstractException.__init__.
-class BadRequestException(AbstractException):
+class FastAPIBadRequestException(FastAPIBaseException):
     """400 Bad Request."""
 
     status_code = status.HTTP_400_BAD_REQUEST
 
 
-class UnauthorizedException(AbstractException):
+class FastAPIUnauthorizedException(FastAPIBaseException):
     """401 Unauthorized."""
 
     status_code = status.HTTP_401_UNAUTHORIZED
 
 
-class ForbiddenException(AbstractException):
+class FastAPIForbiddenException(FastAPIBaseException):
     """403 Forbidden."""
 
     status_code = status.HTTP_403_FORBIDDEN
 
 
-class NotFoundException(AbstractException):
+class FastAPINotFoundException(FastAPIBaseException):
     """404 Not Found."""
 
     status_code = status.HTTP_404_NOT_FOUND
 
 
-class MethodNotAllowedException(AbstractException):
+class FastAPIMethodNotAllowedException(FastAPIBaseException):
     """405 Method Not Allowed."""
 
     status_code = status.HTTP_405_METHOD_NOT_ALLOWED
 
 
-class ConflictException(AbstractException):
+class FastAPIConflictException(FastAPIBaseException):
     """409 Conflict."""
 
     status_code = status.HTTP_409_CONFLICT
 
 
-class GoneException(AbstractException):
+class FastAPIGoneException(FastAPIBaseException):
     """410 Gone."""
 
     status_code = status.HTTP_410_GONE
 
 
-class UnprocessableContentException(AbstractException):
+class FastAPIUnprocessableContentException(FastAPIBaseException):
     """422 Unprocessable Content."""
 
     status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
 
 
-class TooManyRequestsException(AbstractException):
+class FastAPITooManyRequestsException(FastAPIBaseException):
     """429 Too Many Requests."""
 
     status_code = status.HTTP_429_TOO_MANY_REQUESTS
 
 
-class InternalServerErrorException(AbstractException):
+class FastAPIInternalServerErrorException(FastAPIBaseException):
     """500 Internal Server Error."""
 
     status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
 
 
-class NotImplementedException(AbstractException):
+class FastAPINotImplementedException(FastAPIBaseException):
     """501 Not Implemented."""
 
     status_code = status.HTTP_501_NOT_IMPLEMENTED
 
 
-class ServiceUnavailableException(AbstractException):
+class FastAPIServiceUnavailableException(FastAPIBaseException):
     """503 Service Unavailable."""
 
     status_code = status.HTTP_503_SERVICE_UNAVAILABLE

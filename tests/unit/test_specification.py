@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime  # noqa: TC003
+from datetime import datetime
 from typing import Any
 
 import pytest
@@ -10,7 +10,7 @@ from sqlalchemy import ForeignKey, String, not_, or_, select
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from haolib.enums.filter import OrderByType
-from haolib.models.base import AbstractModel
+from haolib.models.sqlalchemy.base import SQLAlchemyBaseModel
 from haolib.specification.base import (
     BaseSpecification,
     EqualsSpecification,
@@ -136,7 +136,7 @@ def test_ilike_specification() -> None:
     assert not ILikeSpecification("name", "John").is_satisfied_by(ObjectForTest(name="Jane"))
 
 
-class TagModel(AbstractModel):
+class TagModel(SQLAlchemyBaseModel):
     """Test model."""
 
     __tablename__ = "tags"
@@ -146,7 +146,7 @@ class TagModel(AbstractModel):
     object: Mapped[ObjectForTestModel | None] = relationship("ObjectForTestModel", back_populates="tags")
 
 
-class ObjectForTestModel(AbstractModel):
+class ObjectForTestModel(SQLAlchemyBaseModel):
     """Test model."""
 
     __tablename__ = "objects"

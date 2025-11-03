@@ -4,10 +4,8 @@ from typing import Self
 
 import pytest
 
-from haolib.batches.entities import EntityBatch
-from haolib.entities.base import (
-    BaseEntity,
-)
+from haolib.batches.batch import Batch
+from haolib.entities.base import BaseEntity
 from haolib.entities.base.create import BaseBulkEntityCreate, BaseEntityCreate
 from haolib.entities.base.read import BaseBulkEntityRead, BaseEntityRead
 from haolib.entities.base.update import BaseBulkEntityUpdate, BaseEntityUpdate
@@ -81,7 +79,7 @@ class EntitiesBulkRead(BaseBulkEntityRead[int, Entity, EntityRead]):
         self.entities = entities
 
     @classmethod
-    async def from_batch(cls, batch: EntityBatch[int, Entity]) -> Self:
+    async def from_batch(cls, batch: Batch[int, Entity]) -> Self:
         """Get entities bulk read from batch."""
         return cls(entities=[EntityRead(id=entity.id) for entity in batch.to_list()])
 
@@ -111,7 +109,7 @@ class EntitiesBulkUpdate(BaseBulkEntityUpdate[int, Entity, EntityUpdate]):
     def __init__(self, entities: list[EntityUpdate]) -> None:
         self.entities = entities
 
-    async def get_entities(self) -> list[EntityUpdate]:
+    async def get_entity_updates(self) -> list[EntityUpdate]:
         """Get entities."""
         return self.entities
 
@@ -137,7 +135,7 @@ class EntitiesBulkCreate(BaseBulkEntityCreate[int, Entity, EntityCreate]):
     def __init__(self, entities: list[EntityCreate]) -> None:
         self.entities = entities
 
-    async def get_entities(self) -> list[EntityCreate]:
+    async def get_entity_creates(self) -> list[EntityCreate]:
         """Get entities."""
         return self.entities
 
@@ -152,7 +150,7 @@ async def test_entity_read() -> None:
 @pytest.mark.asyncio
 async def test_entities_bulk_read() -> None:
     """Test entities bulk read."""
-    batch = EntityBatch[int, Entity]().merge_list(
+    batch = Batch[int, Entity](key_getter=lambda entity: entity.id).merge_list(
         [Entity(id=1, name="test"), Entity(id=2, name="test"), Entity(id=3, name="test")]
     )
     entities_bulk_read = await EntitiesBulkRead.from_batch(batch)
@@ -162,11 +160,15 @@ async def test_entities_bulk_read() -> None:
 @pytest.mark.asyncio
 async def test_entities_bulk_update() -> None:
     """Test entities bulk update."""
-    batch = EntityBatch[int, Entity]().merge_list(
+    batch = Batch[int, Entity](key_getter=lambda entity: entity.id).merge_list(
         [Entity(id=1, name="test"), Entity(id=2, name="test"), Entity(id=3, name="test")]
     )
     update_batch = EntitiesBulkUpdate(
-        entities=[EntityUpdate(id=1, name="test2"), EntityUpdate(id=2, name="test2"), EntityUpdate(id=3, name="test2")]
+        entities=[
+            EntityUpdate(id=1, name="test2"),
+            EntityUpdate(id=2, name="test2"),
+            EntityUpdate(id=3, name="test2"),
+        ]
     )
     updated_batch = await update_batch.update_batch(batch)
     assert updated_batch.to_list() == [

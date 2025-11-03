@@ -1,63 +1,57 @@
-"""SQLAlchemy batches."""
+"""Mapped batches."""
 
-from typing import TYPE_CHECKING, Any, Self
+from typing import Self
+
+from sqlalchemy import ScalarResult
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from haolib.batches.batch import Batch
-from haolib.batches.entities import EntityBatch
-from haolib.entities.base import BaseEntity
-from haolib.models.entities import BaseEntityModel
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
-
-    from sqlalchemy import ScalarResult
-    from sqlalchemy.ext.asyncio import AsyncSession
+from haolib.batches.mapped import MappedBatch, UpdateableMappedBatch
+from haolib.models.abstract.mapped import AbstractMappedModel, AbstractUpdateableMappedModel
 
 
-class SQLAlchemyEntityModelBatch[T_Id, T_Model: BaseEntityModel, T_Entity: BaseEntity](Batch[T_Id, T_Model]):
-    """SQLAlchemy entity model batch."""
+class SQLAlchemyBatch[T_Key, T_Mapped: AbstractMappedModel](Batch[T_Key, T_Mapped]):
+    """SQLAlchemy mapped batch."""
 
-    def __init__(
-        self, model_class: type[T_Model], key_getter: Callable[[T_Model], T_Id] = lambda model: model.id
-    ) -> None:
-        """Initialize the batch."""
+    def merge_from_scalars(self, scalars: ScalarResult[T_Mapped]) -> Self:
+        """Merge the values from scalars to the batch.
 
-        super().__init__(key_getter)
-        self._model_class = model_class
+        Args:
+            scalars: The scalars to merge from.
 
-    async def merge_batch_to_db(self, session: AsyncSession) -> Self:
-        """Merge the batch to the database."""
+        Returns:
+            Self: The updated batch.
 
-        for model in self.to_list():
-            await session.merge(model)
-
-        return self
-
-    def from_scalars(self, scalars: ScalarResult[T_Model]) -> Self:
-        """Return the batch from scalars."""
+        """
 
         self.merge_list(list(scalars.all()))
 
         return self
 
-    def update_from_entity_batch(self, entity_batch: EntityBatch[T_Id, T_Entity], *args: Any, **kwargs: Any) -> Self:
-        """Update the batch from entity batch."""
+    async def merge_to_db(self, session: AsyncSession) -> Self:
+        """Merge the batch to the database.
 
-        for entity in entity_batch:
-            self.get_by_key(entity.id, exception=ValueError).update_from_entity(entity, *args, **kwargs)
+        Args:
+            session: The session to merge to.
+
+        Returns:
+            Self: The updated batch.
+
+        """
+
+        for mapped in self.to_list():
+            await session.merge(mapped)
 
         return self
 
-    def from_entity_batch(self, entity_batch: EntityBatch[T_Id, T_Entity], *args: Any, **kwargs: Any) -> Self:
-        """Return the batch from entity batch."""
 
-        self.merge_list([self._model_class.from_entity(entity, *args, **kwargs) for entity in entity_batch])
+class SQLAlchemyMappedBatch[T_Key, T_Mapped: AbstractMappedModel, T_MappedTo](
+    MappedBatch[T_Key, T_Mapped, T_MappedTo], SQLAlchemyBatch[T_Key, T_Mapped]
+):
+    """SQLAlchemy mapped batch."""
 
-        return self
 
-    def to_entity_batch(self, *args: Any, **kwargs: Any) -> EntityBatch[T_Id, T_Entity]:
-        """Return the entity batch from model batch."""
-
-        return EntityBatch().merge_list(
-            [self.get_by_key(model.id, exception=ValueError).to_entity(*args, **kwargs) for model in self]
-        )
+class SQLAlchemyUpdateableMappedBatch[T_Key, T_Mapped: AbstractUpdateableMappedModel, T_MappedTo](
+    UpdateableMappedBatch[T_Key, T_Mapped, T_MappedTo], SQLAlchemyBatch[T_Key, T_Mapped]
+):
+    """SQLAlchemy updateable mapped batch."""

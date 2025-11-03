@@ -9,8 +9,8 @@ from typing import Any, ClassVar
 from sqlalchemy.orm import DeclarativeBase
 
 
-class AbstractModel(DeclarativeBase):
-    """Base abstract model for database entities.
+class SQLAlchemyBaseModel(DeclarativeBase):
+    """Base declarative base model for database entities.
 
     Provides common functionality for all database models, including
     serialization, deserialization, and basic representation methods.
@@ -18,8 +18,6 @@ class AbstractModel(DeclarativeBase):
     All models extending this class inherit SQLAlchemy's declarative base
     and gain common utility methods.
 
-    Attributes:
-        __abstract__: SQLAlchemy marker indicating this is an abstract base class
 
     """
 
@@ -29,7 +27,7 @@ class AbstractModel(DeclarativeBase):
         """Generate a string representation of the model.
 
         Returns:
-            A string representation including the class name and primary key values
+            str: A string representation including the class name and primary key values
 
         """
         _repr = f"<{self.__class__.__name__} "
@@ -41,7 +39,7 @@ class AbstractModel(DeclarativeBase):
         """Return a string representation of the model.
 
         Returns:
-            The result of __repr__ for consistency
+            str: The result of __repr__ for consistency
 
         """
         return self.__repr__()
@@ -50,7 +48,7 @@ class AbstractModel(DeclarativeBase):
         """Convert the model to a dictionary.
 
         Returns:
-            A dictionary representation of the model's attributes
+            dict[str, Any]: A dictionary representation of the model's attributes
 
         """
         return self.__dict__
@@ -60,7 +58,7 @@ class AbstractModel(DeclarativeBase):
         """Get the names of the model's primary key columns.
 
         Returns:
-            A list of primary key column names
+            list[str]: A list of primary key column names
 
         """
         return [i.name for i in cls.__table__.primary_key.columns.values()]  # type: ignore[attr-defined]
@@ -72,7 +70,7 @@ class AbstractModel(DeclarativeBase):
             name: The name of the attribute
 
         Returns:
-            The value of the specified attribute
+            Any: The value of the specified attribute
 
         """
         return getattr(self, name)

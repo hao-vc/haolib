@@ -14,17 +14,18 @@ from haolib.configs.idempotency import IdempotencyConfig
 from haolib.configs.observability import ObservabilityConfig
 from haolib.configs.redis import RedisConfig
 from haolib.configs.sqlalchemy import SQLAlchemyConfig
-from haolib.dependencies.idempotency import IdempotencyProvider
 from haolib.dependencies.redis import RedisProvider
 from haolib.dependencies.sqlalchemy import SQLAlchemyProvider
 from haolib.entrypoints.fastapi import FastAPIEntrypoint
-from haolib.entrypoints.fastmcp import FastMCPEntrypoint
-from haolib.exceptions.fastapi import register_exception_handlers
-
-
-def register_exception_handlers_for_test(app: FastAPI) -> None:
-    """Register exception handlers for test."""
-    register_exception_handlers(app, should_observe_exceptions=False)
+from haolib.entrypoints.fastmcp import FastMCPEntrypoint, FastMCPEntrypointComponent
+from haolib.exceptions.fastapi.base import FastAPIBaseException
+from haolib.exceptions.fastapi.handlers import (
+    fastapi_base_exception_handler,
+    fastapi_unknown_exception_handler,
+    fastapi_unknown_exception_handler_with_observability,
+)
+from haolib.idempotency.storage import AbstractIdempotencyKeysStorage
+from haolib.idempotency.storage.redis import RedisIdempotencyKeysStorage
 
 
 class MockAppConfig(BaseConfig):
@@ -49,6 +50,13 @@ class MockProvider(Provider):
         """SQLAlchemy config."""
         return app_config.sqlalchemy
 
+    @provide(scope=Scope.REQUEST)
+    async def idempotency_keys_storage(
+        self, redis: Redis, idempotency_config: IdempotencyConfig
+    ) -> AbstractIdempotencyKeysStorage:
+        """Idempotency keys storage."""
+        return RedisIdempotencyKeysStorage(redis=redis, ttl=idempotency_config.ttl)
+
     @provide(scope=Scope.APP)
     async def redis_config(self, app_config: MockAppConfig) -> RedisConfig:
         """Redis config."""
@@ -63,7 +71,7 @@ class MockProvider(Provider):
 @pytest_asyncio.fixture
 async def container() -> AsyncContainer:
     """Test container."""
-    return make_async_container(MockProvider(), SQLAlchemyProvider(), RedisProvider(), IdempotencyProvider())
+    return make_async_container(SQLAlchemyProvider(), RedisProvider(), MockProvider())
 
 
 @pytest_asyncio.fixture()
@@ -79,7 +87,12 @@ async def app(container: AsyncContainer) -> FastAPI:
     return (
         FastAPIEntrypoint(app=FastAPI())
         .setup_dishka(container)
-        .setup_exception_handlers(should_observe_exceptions=False)
+        .setup_exception_handlers(
+            exception_handlers={
+                Exception: fastapi_unknown_exception_handler,
+                FastAPIBaseException: fastapi_base_exception_handler,
+            }
+        )
         .setup_idempotency_middleware()
         .get_app()
     )
@@ -91,7 +104,12 @@ async def app_with_observability(container: AsyncContainer) -> FastAPI:
     return (
         FastAPIEntrypoint(app=FastAPI())
         .setup_dishka(container)
-        .setup_exception_handlers(should_observe_exceptions=True)
+        .setup_exception_handlers(
+            exception_handlers={
+                Exception: fastapi_unknown_exception_handler_with_observability,
+                FastAPIBaseException: fastapi_base_exception_handler,
+            }
+        )
         .setup_idempotency_middleware()
         .get_app()
     )
@@ -105,7 +123,12 @@ async def app_with_mcp_and_mcp(container: AsyncContainer) -> tuple[FastAPI, Fast
     fastapi_entrypoint = (
         FastAPIEntrypoint(app=FastAPI())
         .setup_dishka(container)
-        .setup_exception_handlers(should_observe_exceptions=False)
+        .setup_exception_handlers(
+            exception_handlers={
+                Exception: fastapi_unknown_exception_handler,
+                FastAPIBaseException: fastapi_base_exception_handler,
+            }
+        )
         .setup_idempotency_middleware()
     )
 
@@ -114,7 +137,7 @@ async def app_with_mcp_and_mcp(container: AsyncContainer) -> tuple[FastAPI, Fast
         return "hello"
 
     fastmcp_entrypoint = FastMCPEntrypoint(fastmcp=FastMCP.from_fastapi(app=app))
-    fastapi_entrypoint.setup_mcp(fastmcp_entrypoint, "/mcp")
+    fastapi_entrypoint.setup_mcp(FastMCPEntrypointComponent(fastmcp=fastmcp_entrypoint.get_app()), "/mcp")
 
     return fastapi_entrypoint.get_app(), fastmcp_entrypoint.get_app()
 

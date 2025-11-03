@@ -2,18 +2,22 @@
 
 import pytest
 
-from haolib.exceptions.base import AbstractException, BadRequestException, NotFoundException
-from haolib.exceptions.fastapi import to_error_schema
+from haolib.exceptions.fastapi.base import (
+    FastAPIBadRequestException,
+    FastAPIBaseException,
+    FastAPINotFoundException,
+)
+from haolib.exceptions.fastapi.schema import FastAPIErrorSchema
 
 
-class NotFoundExceptionForTest(NotFoundException):
+class NotFoundExceptionForTest(FastAPINotFoundException):
     """NotFoundException."""
 
     detail = "A not found exception"
     additional_info = {"test": "test"}
 
 
-class BadRequestExceptionForTest(BadRequestException):
+class BadRequestExceptionForTest(FastAPIBadRequestException):
     """BadRequestException."""
 
     detail = "A bad request exception"
@@ -25,7 +29,7 @@ def test_to_error_schema() -> None:
 
     exc_list = [NotFoundExceptionForTest, BadRequestExceptionForTest]
 
-    error_schema = to_error_schema(exc_list)
+    error_schema = FastAPIErrorSchema.from_exceptions(exc_list)
 
     assert error_schema.model_fields["error_code"].examples
     assert (
@@ -38,13 +42,13 @@ def test_to_error_schema() -> None:
     assert error_schema.model_fields["detail"].examples[0] == "A not found exception OR A bad request exception"
 
 
-class CustomException(AbstractException):
+class CustomException(FastAPIBaseException):
     """Custom exception."""
 
     detail = "A custom exception {test}"
 
 
-class CustomExceptionWithoutFormatSpecifiers(AbstractException):
+class CustomExceptionWithoutFormatSpecifiers(FastAPIBaseException):
     """Custom exception without error code."""
 
     detail = "A custom exception"
@@ -87,7 +91,7 @@ def test_exception_error_code() -> None:
     assert exc.get_class_error_code() == "CUSTOM_EXCEPTION"
 
 
-class CustomExceptionWithFewFormatSpecifiers(AbstractException):
+class CustomExceptionWithFewFormatSpecifiers(FastAPIBaseException):
     """Custom exception with few format specifiers."""
 
     detail = "A custom exception {test} {test2}"

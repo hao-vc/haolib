@@ -3,8 +3,8 @@
 import logging
 
 
-class LogfmtFormatter(logging.Formatter):
-    """Formatter for logfmt.
+class HAOLogfmtFormatter(logging.Formatter):
+    """HAO logfmt formatter.
 
     This formatter is used to format the log messages in logfmt format.
     It is used to format the log messages in logfmt format.

@@ -2,13 +2,13 @@
 
 import asyncio
 import contextlib
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, Self
 
 from dishka.integrations.taskiq import setup_dishka as setup_dishka_taskiq
 from taskiq.api import run_receiver_task, run_scheduler_task
 
-from haolib.entrypoints.base import Entrypoint
-from haolib.entrypoints.exceptions import EntrypointsInconsistencyError
+from haolib.entrypoints.abstract import AbstractEntrypoint, EntrypointInconsistencyError
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -43,7 +43,7 @@ class TaskiqEntrypointWorker:
     async def startup(self) -> None:
         """Startup."""
         if self._scheduler is None and not self._should_run_worker:
-            raise EntrypointsInconsistencyError("Both scheduler and worker are not set.")
+            raise EntrypointInconsistencyError("Both scheduler and worker are not set.")
 
         await self._broker.startup()
 
@@ -92,7 +92,7 @@ class TaskiqEntrypointWorker:
         await self.shutdown()
 
 
-class TaskiqEntrypoint(Entrypoint):
+class TaskiqEntrypoint(AbstractEntrypoint):
     """One threaded taskiq entrypoint."""
 
     def __init__(self, broker: AsyncBroker) -> None:
@@ -104,6 +104,7 @@ class TaskiqEntrypoint(Entrypoint):
         self._worker_kwargs: Mapping[str, Any] | None = None
         self._scheduler_args: Sequence[Any] | None = None
         self._scheduler_kwargs: Mapping[str, Any] | None = None
+        self._exception_handlers: dict[type[Exception], Callable[[Exception], None]] | None = None
 
     def setup_dishka(self, container: AsyncContainer) -> Self:
         """Setup dishka."""
@@ -141,16 +142,50 @@ class TaskiqEntrypoint(Entrypoint):
 
         return self
 
+    def setup_exception_handlers(self, exception_handlers: dict[type[Exception], Callable[[Exception], None]]) -> Self:
+        """Setup exception handlers.
+
+        Args:
+            exception_handlers: The exception handlers.
+
+        """
+        self._exception_handlers = exception_handlers
+
+        return self
+
     async def run(self) -> None:
         """Run the taskiq entrypoint."""
 
-        async with TaskiqEntrypointWorker(
-            self._broker,
-            self._scheduler,
-            self._should_run_worker,
-            self._worker_args,
-            self._worker_kwargs,
-            self._scheduler_args,
-            self._scheduler_kwargs,
-        ):
-            pass
+        if self._exception_handlers is None:
+            async with TaskiqEntrypointWorker(
+                self._broker,
+                self._scheduler,
+                self._should_run_worker,
+                self._worker_args,
+                self._worker_kwargs,
+                self._scheduler_args,
+                self._scheduler_kwargs,
+            ):
+                pass
+
+            return
+
+        try:
+            async with TaskiqEntrypointWorker(
+                self._broker,
+                self._scheduler,
+                self._should_run_worker,
+                self._worker_args,
+                self._worker_kwargs,
+                self._scheduler_args,
+                self._scheduler_kwargs,
+            ):
+                pass
+        except Exception as exc:
+            exception_handler = next(
+                (handler for exc_type, handler in self._exception_handlers.items() if isinstance(exc, exc_type)), None
+            )
+            if exception_handler is None:
+                raise
+
+            exception_handler(exc)

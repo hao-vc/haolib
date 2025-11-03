@@ -1,15 +1,17 @@
 """Base interface for batches."""
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from typing import Protocol, Self, overload
 
 
-class BaseBatch[T_Key, T_Value](Protocol):
+class AbstractBatch[T_Key, T_Value](Protocol):
     """Base interface for batches.
 
     Batch here is defined as a collection of items that must be ordered,
     support indexing using ID (or, in general, any grouping key), and be able to be iterated over.
     """
+
+    key_getter: Callable[[T_Value], T_Key]
 
     def __iter__(self) -> Iterator[T_Value]:
         """Iterate over the batch."""

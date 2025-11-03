@@ -3,7 +3,7 @@
 import abc
 from typing import Any, Self
 
-from haolib.batches.entities import EntityBatch
+from haolib.batches.batch import Batch
 from haolib.entities.base import BaseEntity, HasId
 
 
@@ -21,5 +21,5 @@ class BaseBulkEntityRead[T_Id, T_Entity: BaseEntity, T_EntityRead: BaseEntityRea
 
     @classmethod
     @abc.abstractmethod
-    async def from_batch(cls, batch: EntityBatch[T_Id, T_Entity], *args: Any, **kwargs: Any) -> Self:
+    async def from_batch(cls, batch: Batch[T_Id, T_Entity], *args: Any, **kwargs: Any) -> Self:
         """Get bulk entity read from batch."""

@@ -5,6 +5,6 @@ used across the application to ensure consistent data structures
 and behavior.
 """
 
-from haolib.models.base import AbstractModel
+from haolib.models.sqlalchemy.base import SQLAlchemyBaseModel
 
-__all__ = ["AbstractModel"]
+__all__ = ["SQLAlchemyBaseModel"]

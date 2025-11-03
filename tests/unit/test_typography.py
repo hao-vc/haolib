@@ -1,6 +1,6 @@
 """Test typography."""
 
-from haolib.utils.typography import to_constant_case
+from haolib.utils.strings import to_constant_case
 
 
 def test_to_constant_case() -> None:
