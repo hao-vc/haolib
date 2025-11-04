@@ -22,7 +22,7 @@ class FastAPIErrorSchema(BaseModel):
     def from_exceptions(cls, exceptions: Iterable[type[FastAPIBaseException]]) -> type[FastAPIErrorSchema]:
         """Create error schema from FastAPIAbstractException exceptions."""
         return create_model(
-            "ErrorSchemaFor" + "And".join([exc.__name__ for exc in exceptions]),
+            "ErrorSchemaFor" + "And".join([exc.__name__.replace("FastAPI", "") for exc in exceptions]),
             error_code=(
                 str,
                 Field(

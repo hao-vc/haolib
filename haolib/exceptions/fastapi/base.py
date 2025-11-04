@@ -85,7 +85,7 @@ class FastAPIBaseException(AbstractException, HTTPException, metaclass=ABCMeta):
     @classmethod
     def get_class_error_code(cls) -> str:
         """Get error code. It's a constant case of the class name."""
-        return to_constant_case(cls.__name__)
+        return to_constant_case(cls.__name__.replace("FastAPI", ""))
 
     @property
     def error_code(self) -> str:
