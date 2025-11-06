@@ -9,8 +9,8 @@ from haolib.models.sqlalchemy.base import SQLAlchemyBaseModel
 class SQLAlchemyMappedModel[T_MappedTo](SQLAlchemyBaseModel):
     """SQLAlchemy mapped model."""
 
-    @abc.abstractmethod
     @classmethod
+    @abc.abstractmethod
     def create_from(cls, from_value: T_MappedTo, *args: Any, **kwargs: Any) -> Self:
         """Create a model instance from a from value."""
 
