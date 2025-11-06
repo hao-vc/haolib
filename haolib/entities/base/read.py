@@ -4,10 +4,10 @@ import abc
 from typing import Any, Self
 
 from haolib.batches.batch import Batch
-from haolib.entities.base import BaseEntity, HasId
+from haolib.entities.base import BaseEntity
 
 
-class BaseEntityRead[T_Id, T_Entity: BaseEntity](HasId[T_Id], abc.ABC):
+class BaseEntityRead[T_Id, T_Entity: BaseEntity](abc.ABC):
     """Base entity read."""
 
     @classmethod

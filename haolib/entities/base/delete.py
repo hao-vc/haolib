@@ -3,13 +3,11 @@
 import abc
 from collections.abc import Iterable
 
-from haolib.entities.base import BaseEntity
+from haolib.entities.base import BaseEntity, HasId
 
 
-class BaseEntityDelete[T_Id, T_Entity: BaseEntity](abc.ABC):
+class BaseEntityDelete[T_Id, T_Entity: BaseEntity](HasId[T_Id], abc.ABC):
     """Base entity delete."""
-
-    id: T_Id
 
 
 class BaseBulkEntityDelete[T_Id, T_Entity: BaseEntity, T_EntityDelete: BaseEntityDelete](abc.ABC):
