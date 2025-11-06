@@ -5,6 +5,7 @@ from collections.abc import AsyncGenerator
 from dishka import Provider, Scope, provide
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
 from haolib.configs.sqlalchemy import SQLAlchemyConfig
 
@@ -15,7 +16,10 @@ class SQLAlchemyProvider(Provider):
     @provide(scope=Scope.APP)
     async def db_engine(self, sqlalchemy_config: SQLAlchemyConfig) -> AsyncEngine:
         """Get db engine."""
-        return create_async_engine(sqlalchemy_config.url)
+        if sqlalchemy_config.use_pool:
+            return create_async_engine(sqlalchemy_config.url)
+
+        return create_async_engine(sqlalchemy_config.url, poolclass=NullPool)
 
     @provide(scope=Scope.APP)
     async def db_session_maker(self, db_engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
