@@ -1,13 +1,11 @@
 """FastAPI security utilities."""
 
-from typing import TYPE_CHECKING, Annotated
+from typing import Annotated
 
+from fastapi import HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.security.utils import get_authorization_scheme_param
 from typing_extensions import Doc
-
-if TYPE_CHECKING:
-    from fastapi import HTTPException, Request
 
 
 class HTTPBearerWithCustomError(HTTPBearer):
