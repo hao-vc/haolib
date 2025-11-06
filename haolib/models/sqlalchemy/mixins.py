@@ -1,14 +1,11 @@
 """Mixins for models."""
 
-from typing import TYPE_CHECKING
+from datetime import datetime
 from uuid import UUID, uuid7  # type: ignore[attr-defined]
 
 from sqlalchemy import DateTime, func
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import UUID as SAUUID
-
-if TYPE_CHECKING:
-    from datetime import datetime
 
 
 class SQLAlchemyIdModel[T_Id: UUID]:
