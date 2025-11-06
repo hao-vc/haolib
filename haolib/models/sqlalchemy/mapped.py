@@ -1,13 +1,15 @@
 """SQLAlchemy mapped models."""
 
 import abc
-from typing import Any, Self
+from typing import Any, ClassVar, Self
 
 from haolib.models.sqlalchemy.base import SQLAlchemyBaseModel
 
 
 class SQLAlchemyMappedModel[T_MappedTo](SQLAlchemyBaseModel):
     """SQLAlchemy mapped model."""
+
+    __abstract__: ClassVar[bool] = True
 
     @classmethod
     @abc.abstractmethod
@@ -21,6 +23,8 @@ class SQLAlchemyMappedModel[T_MappedTo](SQLAlchemyBaseModel):
 
 class SQLAlchemyUpdateableMappedModel[T_MappedTo](SQLAlchemyBaseModel):
     """SQLAlchemy updateable mapped model."""
+
+    __abstract__: ClassVar[bool] = True
 
     @abc.abstractmethod
     def update_from(self, from_value: T_MappedTo, *args: Any, **kwargs: Any) -> Self:
