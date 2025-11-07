@@ -7,7 +7,7 @@ from jwt.exceptions import InvalidTokenError
 from pydantic import BaseModel
 
 from haolib.configs.jwt import JWKConfig
-from haolib.security.pyjwt_async import AsyncPyJWKClient
+from haolib.security.pyjwt import AsyncPyJWKClient
 
 
 class StackAuthJWKTokenPayload(BaseModel):
