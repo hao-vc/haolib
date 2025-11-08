@@ -3,11 +3,11 @@
 from collections.abc import AsyncGenerator
 
 from dishka import Provider, Scope, provide
-from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from haolib.configs.sqlalchemy import SQLAlchemyConfig
+from haolib.database.transactions.sqlalchemy import SQLAlchemyTransaction
 
 
 class SQLAlchemyProvider(Provider):
@@ -49,9 +49,21 @@ class SQLAlchemyProvider(Provider):
 
         """
         async with db_session_maker() as session:
-            try:
-                yield session
-                await session.commit()
-            except SQLAlchemyError:
-                await session.rollback()
-                raise
+            yield session
+
+    @provide(scope=Scope.REQUEST)
+    async def transaction(
+        self,
+        new_session: AsyncSession,
+    ) -> AsyncGenerator[SQLAlchemyTransaction]:
+        """Get a new transaction.
+
+        Args:
+            new_session (AsyncGenerator[AsyncSession]): The new session.
+
+        Returns:
+            SQLAlchemyTransaction: A new transaction.
+
+        """
+        async with SQLAlchemyTransaction(new_session) as transaction:
+            yield transaction
