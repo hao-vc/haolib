@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Any, Self
 
 from haolib.batches.abstract import AbstractBatch
 from haolib.batches.batch import Batch
-from haolib.models.abstract.mapped import AbstractMappedModel, AbstractUpdateableMappedModel
+from haolib.database.models.abstract.mapped import AbstractMappedModel, AbstractUpdateableMappedModel
 
 if TYPE_CHECKING:
     from collections.abc import Callable

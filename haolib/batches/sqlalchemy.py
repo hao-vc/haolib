@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from haolib.batches.batch import Batch
 from haolib.batches.mapped import MappedBatch, UpdateableMappedBatch
-from haolib.models.abstract.mapped import AbstractMappedModel, AbstractUpdateableMappedModel
+from haolib.database.models.abstract.mapped import AbstractMappedModel, AbstractUpdateableMappedModel
 
 
 class SQLAlchemyBatch[T_Key, T_Mapped: AbstractMappedModel](Batch[T_Key, T_Mapped]):
