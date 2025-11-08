@@ -3,7 +3,7 @@
 import abc
 from typing import Any, ClassVar, Self
 
-from haolib.models.sqlalchemy.base import SQLAlchemyBaseModel
+from haolib.database.models.sqlalchemy.base import SQLAlchemyBaseModel
 
 
 class SQLAlchemyMappedModel[T_MappedTo](SQLAlchemyBaseModel):
