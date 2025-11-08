@@ -3,6 +3,7 @@
 from types import TracebackType
 from typing import Self
 
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from haolib.database.transactions.abstract import AbstractDatabaseTransaction, DatabaseTransactionError
@@ -32,7 +33,16 @@ class SQLAlchemyTransaction(AbstractDatabaseTransaction[AsyncSession]):
         # Problem: when we pass an AsyncSession instance to a repository, it is not closed even after we exit
         # the context manager of the the session. To fix it, we add another abstraction layer on top of the session
         # and set the session to None when we exit the context manager.
-        self._session = None
+        if self._session is None:
+            raise DatabaseTransactionError("Transaction session is closed.")
+
+        try:
+            await self._session.commit()
+        except SQLAlchemyError:
+            await self._session.rollback()
+            raise
+        finally:
+            await self.close()
 
     async def close(self) -> None:
         """Close the session."""
