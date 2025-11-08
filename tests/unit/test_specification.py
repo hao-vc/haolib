@@ -10,8 +10,7 @@ from sqlalchemy import ForeignKey, String, not_, or_, select
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from haolib.database.models.sqlalchemy.base import SQLAlchemyBaseModel
-from haolib.enums.filter import OrderByType
-from haolib.specification.base import (
+from haolib.database.specification.base import (
     BaseSpecification,
     EqualsSpecification,
     GreaterThanOrEqualsToSpecification,
@@ -24,7 +23,8 @@ from haolib.specification.base import (
     OrderBySpecification,
     SubListSpecification,
 )
-from haolib.specification.sqlalchemy import add_order_by_specifications_to_query, add_specifications_to_query
+from haolib.database.specification.sqlalchemy import add_order_by_specifications_to_query, add_specifications_to_query
+from haolib.enums.filter import OrderByType
 
 
 class ObjectForTest:
