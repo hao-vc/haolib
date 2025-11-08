@@ -14,8 +14,8 @@ from haolib.configs.idempotency import IdempotencyConfig
 from haolib.configs.observability import ObservabilityConfig
 from haolib.configs.redis import RedisConfig
 from haolib.configs.sqlalchemy import SQLAlchemyConfig
-from haolib.dependencies.redis import RedisProvider
-from haolib.dependencies.sqlalchemy import SQLAlchemyProvider
+from haolib.dependencies.dishka.redis import RedisProvider
+from haolib.dependencies.dishka.sqlalchemy import SQLAlchemyProvider
 from haolib.entrypoints.fastapi import FastAPIEntrypoint
 from haolib.entrypoints.fastmcp import FastMCPEntrypoint, FastMCPEntrypointComponent
 from haolib.exceptions.fastapi.base import FastAPIBaseException
