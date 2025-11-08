@@ -11,7 +11,7 @@ from jwt.jwk_set_cache import JWKSetCache
 
 
 class AsyncPyJWKClient:
-    """PyJWKClient."""
+    """Async PyJWKClient for fetching JWKs from a JWKS endpoint."""
 
     def __init__(
         self,

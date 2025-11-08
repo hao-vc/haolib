@@ -1,13 +1,13 @@
-"""StackAuth client."""
+"""Async PyJWKClient."""
 
 from uuid import UUID
 
-from jwt import decode
-from jwt.exceptions import InvalidTokenError
+from jwt import InvalidTokenError, decode
 from pydantic import BaseModel
 
 from haolib.configs.jwt import JWKConfig
-from haolib.security.pyjwt import AsyncPyJWKClient
+from haolib.security.stack.abstract import AbstractStackAuthJWKEncoder
+from haolib.security.utils.pyjwt import AsyncPyJWKClient
 
 
 class StackAuthJWKTokenPayload(BaseModel):
@@ -17,11 +17,12 @@ class StackAuthJWKTokenPayload(BaseModel):
     is_anonymous: bool
 
 
-class StackAuthJWKService:
-    """StackAuth JWK service."""
+class StackAuthJWKEncoder(AbstractStackAuthJWKEncoder):
+    """StackAuth JWK encoder."""
 
-    def __init__(self, jwk_config: JWKConfig) -> None:
-        """Initialize the StackAuth JWK service."""
+    def __init__(self, project_id: str, jwk_config: JWKConfig) -> None:
+        """Initialize the StackAuth JWK encoder."""
+        self._project_id = project_id
         self._pyjwk_client = AsyncPyJWKClient(jwk_config.uri)
 
     async def decode(self, token: str) -> StackAuthJWKTokenPayload | None:
@@ -32,7 +33,7 @@ class StackAuthJWKService:
                 token,
                 signing_key.key,
                 algorithms=["ES256"],
-                audience="<your-project-id>",
+                audience=self._project_id,
             )
 
             return StackAuthJWKTokenPayload(user_id=UUID(payload["sub"]), is_anonymous=payload.get("role") == "anon")
