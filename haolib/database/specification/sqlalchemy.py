@@ -5,8 +5,7 @@ from typing import Any
 from sqlalchemy import Select, not_, or_
 from sqlalchemy.orm import DeclarativeBase, InstrumentedAttribute
 
-from haolib.enums.filter import OrderByType
-from haolib.specification.base import (
+from haolib.database.specification.base import (
     BaseSpecification,
     EqualsSpecification,
     GreaterThanOrEqualsToSpecification,
@@ -19,6 +18,7 @@ from haolib.specification.base import (
     OrderBySpecification,
     SubListSpecification,
 )
+from haolib.enums.filter import OrderByType
 from haolib.utils.rattrs import rgetattr
 
 
