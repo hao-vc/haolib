@@ -5,8 +5,8 @@ import logging
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
-from haolib.exceptions.fastapi.base import FastAPIBaseException
-from haolib.exceptions.fastapi.schema import FastAPIErrorSchema
+from haolib.exceptions.base.fastapi import FastAPIBaseException
+from haolib.exceptions.schemas.fastapi import FastAPIErrorSchema
 from haolib.observability.utils import observe_exception
 
 logger = logging.getLogger(__name__)

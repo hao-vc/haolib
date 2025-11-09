@@ -33,11 +33,13 @@ class FilterType(BaseEnum):
     func = "func"
     """Function filter."""
 
+
 class MinMaxType(BaseEnum):
     """Min max type."""
 
     MIN = "min"
     MAX = "max"
+
 
 class OrderByType(BaseEnum):
     """Order by filter type."""

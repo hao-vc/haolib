@@ -5,7 +5,7 @@ from collections.abc import Awaitable, Callable
 from fastapi import Request, Response
 from fastapi.responses import JSONResponse
 
-from haolib.idempotency.storage import AbstractIdempotencyKeysStorage
+from haolib.web.idempotency.storages.abstract import AbstractIdempotencyKeysStorage
 
 REDIRECT_STATUS_CODES_LOWER_BOUND = 300
 REDIRECT_STATUS_CODES_UPPER_BOUND = 399

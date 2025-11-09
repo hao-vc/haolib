@@ -10,14 +10,14 @@ from uvicorn import Config, Server
 from haolib.configs.cors import CORSConfig
 from haolib.configs.server import ServerConfig
 from haolib.entrypoints.abstract import AbstractEntrypoint, EntrypointInconsistencyError
-from haolib.exceptions.fastapi.base import FastAPIBaseException
-from haolib.exceptions.fastapi.handlers import fastapi_base_exception_handler, fastapi_unknown_exception_handler
-from haolib.idempotency.fastapi import (
+from haolib.exceptions.base.fastapi import FastAPIBaseException
+from haolib.exceptions.handlers.fastapi import fastapi_base_exception_handler, fastapi_unknown_exception_handler
+from haolib.observability.setupper import ObservabilitySetupper
+from haolib.web.idempotency.fastapi import (
     fastapi_default_idempotency_response_factory,
     fastapi_idempotency_middleware_handler,
 )
-from haolib.idempotency.storage import AbstractIdempotencyKeysStorage
-from haolib.observability.setupper import ObservabilitySetupper
+from haolib.web.idempotency.storages.abstract import AbstractIdempotencyKeysStorage
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable

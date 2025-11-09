@@ -7,7 +7,7 @@ from typing import Any
 
 from fastapi import HTTPException, status
 
-from haolib.exceptions.abstract import AbstractException
+from haolib.exceptions.base.abstract import AbstractException
 from haolib.utils.strings import to_constant_case
 
 logger = getLogger(__name__)

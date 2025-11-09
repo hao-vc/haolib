@@ -5,7 +5,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field, create_model
 
-from haolib.exceptions.fastapi.base import FastAPIBaseException
+from haolib.exceptions.base.fastapi import FastAPIBaseException
 
 
 class FastAPIErrorSchema(BaseModel):

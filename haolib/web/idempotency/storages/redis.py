@@ -4,7 +4,7 @@ from datetime import timedelta
 
 from redis.asyncio import Redis
 
-from haolib.idempotency.storage.abstract import AbstractIdempotencyKeysStorage
+from haolib.web.idempotency.storages.abstract import AbstractIdempotencyKeysStorage
 
 
 class RedisIdempotencyKeysStorage(AbstractIdempotencyKeysStorage):
