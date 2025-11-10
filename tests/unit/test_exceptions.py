@@ -2,12 +2,12 @@
 
 import pytest
 
-from haolib.exceptions.fastapi.base import (
+from haolib.exceptions.base.fastapi import (
     FastAPIBadRequestException,
     FastAPIBaseException,
     FastAPINotFoundException,
 )
-from haolib.exceptions.fastapi.schema import FastAPIErrorSchema
+from haolib.exceptions.schemas.fastapi import FastAPIErrorSchema
 
 
 class NotFoundExceptionForTest(FastAPINotFoundException):

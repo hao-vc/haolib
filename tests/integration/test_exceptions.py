@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 import pytest
 from fastapi import FastAPI, status
 
-from haolib.exceptions.fastapi.base import (
+from haolib.exceptions.base.fastapi import (
     FastAPIBadRequestException,
     FastAPIBaseException,
     FastAPIConflictException,

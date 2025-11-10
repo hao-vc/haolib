@@ -18,8 +18,9 @@ from haolib.entrypoints.fastapi import FastAPIEntrypoint
 from haolib.entrypoints.fastmcp import FastMCPEntrypointComponent
 from haolib.entrypoints.faststream import FastStreamEntrypointComponent
 from haolib.entrypoints.taskiq import TaskiqEntrypoint
-from haolib.idempotency.storage import AbstractIdempotencyKeysStorage, RedisIdempotencyKeysStorage
 from haolib.observability.setupper import ObservabilitySetupper
+from haolib.web.idempotency.storages.abstract import AbstractIdempotencyKeysStorage
+from haolib.web.idempotency.storages.redis import RedisIdempotencyKeysStorage
 from tests.utils import ensure_successful_run
 
 

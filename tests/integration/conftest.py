@@ -18,14 +18,14 @@ from haolib.dependencies.dishka.redis import RedisProvider
 from haolib.dependencies.dishka.sqlalchemy import SQLAlchemyProvider
 from haolib.entrypoints.fastapi import FastAPIEntrypoint
 from haolib.entrypoints.fastmcp import FastMCPEntrypoint, FastMCPEntrypointComponent
-from haolib.exceptions.fastapi.base import FastAPIBaseException
-from haolib.exceptions.fastapi.handlers import (
+from haolib.exceptions.base.fastapi import FastAPIBaseException
+from haolib.exceptions.handlers.fastapi import (
     fastapi_base_exception_handler,
     fastapi_unknown_exception_handler,
     fastapi_unknown_exception_handler_with_observability,
 )
-from haolib.idempotency.storage import AbstractIdempotencyKeysStorage
-from haolib.idempotency.storage.redis import RedisIdempotencyKeysStorage
+from haolib.web.idempotency.storages.abstract import AbstractIdempotencyKeysStorage
+from haolib.web.idempotency.storages.redis import RedisIdempotencyKeysStorage
 
 
 class MockAppConfig(BaseConfig):

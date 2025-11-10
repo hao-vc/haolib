@@ -9,7 +9,7 @@ import pytest
 from sqlalchemy import ForeignKey, String, not_, or_, select
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from haolib.database.models.sqlalchemy.base import SQLAlchemyBaseModel
+from haolib.database.models.base.sqlalchemy import SQLAlchemyBaseModel
 from haolib.database.specification.base import (
     BaseSpecification,
     EqualsSpecification,
