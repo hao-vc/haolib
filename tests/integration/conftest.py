@@ -13,6 +13,7 @@ from haolib.configs.base import BaseConfig
 from haolib.configs.idempotency import IdempotencyConfig
 from haolib.configs.observability import ObservabilityConfig
 from haolib.configs.redis import RedisConfig
+from haolib.configs.s3 import S3Config
 from haolib.configs.sqlalchemy import SQLAlchemyConfig
 from haolib.dependencies.dishka.redis import RedisProvider
 from haolib.dependencies.dishka.sqlalchemy import SQLAlchemyProvider
@@ -31,6 +32,7 @@ from haolib.web.idempotency.storages.redis import RedisIdempotencyKeysStorage
 class MockAppConfig(BaseConfig):
     """Mock app config."""
 
+    s3: S3Config
     sqlalchemy: SQLAlchemyConfig
     redis: RedisConfig
     idempotency: IdempotencyConfig

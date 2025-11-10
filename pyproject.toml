@@ -33,6 +33,7 @@ observability = [
     "opentelemetry-instrumentation-logging>=0.57b0",
 ]
 security = ["bcrypt>=4.3.0", "cryptography>=45.0.6", "pyjwt[crypto]>=2.10.1"]
+s3 = ["aioboto3>=15.5.0"]
 
 
 [tool.setuptools.package-data]
@@ -76,6 +77,8 @@ lint.ignore = [
     "TC003",   # typing-only-standard-library-import
 ]
 
+[tool.ruff.lint.per-file-ignores]
+"./tests/integration/s3/conftest.py" = ["ARG002", "EM102"]
 
 [tool.mypy]
 python_version = "3.14"
