@@ -1,0 +1,75 @@
+---
+title: 'What is next?'
+description: 'What am I supposed to do if I want to build an application with haolib?'
+icon: 'question'
+---
+
+import { Dialogue } from '/snippets/dialogue.mdx';
+
+Congratulations! You surely were brave enough to read the "[READ THIS NO MATTER WHAT, SERIOUSLY!!!](/index)" section and you are ready to start...
+
+To do what exactly? Build an application with another fancy framework?
+
+No, no, no, it is not that easy! First, you have to choose the tools to use. And we have some recommendations for you!
+
+
+## Our recommendation is to use the following tools (we consider these SOTA and haolib supports them in one way or another):
+
+### Web API
+- [FastAPI](https://fastapi.tiangolo.com/) as the web framework
+
+### Async API
+- [FastStream](https://faststream.dev/) as the async API framework
+- [Apache Kafka](https://kafka.apache.org/) as the message broker
+
+### Database
+
+- [SQLAlchemy](https://www.sqlalchemy.org/) as the [ORM](https://en.wikipedia.org/wiki/Object%E2%80%93relational_mapping) or [the query builder](https://en.wikipedia.org/wiki/Object%E2%80%93relational_mapping)
+- [PostgreSQL](https://www.postgresql.org/) as the database. Or any other database that is built on top of PostgreSQL, for example, [Supabase](https://supabase.com/docs)
+- [Redis](https://redis.io/docs/latest/develop/clients/redis-py/) for caching
+
+### Background tasks
+
+- [TaskIQ](https://taskiq-python.github.io/guide/getting-started.html) as the background tasks framework
+
+### Observability
+
+- [OpenTelemetry](https://opentelemetry.io/) as the observability toolkit
+- [Tempo](https://grafana.com/docs/tempo/latest/) for tracing
+- [Mimir](https://grafana.com/docs/mimir/latest/) for metrics
+- [Loki](https://grafana.com/oss/loki/) for logging
+- [Grafana](https://grafana.com/) for visualization
+
+### Security
+
+[StackAuth](https://stack-auth.com/) as the authentication and authorization platform. Can be self-hosted and easily integrated with Next.JS (which is 100% SOTA) or any other JavaScript/TypeScript framework using StackAuth SDK
+
+
+<Note>Now, when you are familiar with the SOTA tools to use and probably selected some of them for your project, let's see what we should do next... Look! It's HAO!</Note>
+
+<Dialogue dialogue={
+    [
+        {
+            role: 'writer',
+            content: 'Meow! HAO here! I am gonna help you if you have any questions!'
+        },
+        {
+            role: 'reader',
+            content: 'The only question so far is how a cat can help me build an application?'
+        },
+        {
+            role: 'writer',
+            content: 'Well, I am not a regular cat, I am a Humanless Autonomous Organism! I will help you in the process of exploring the haolib integrated tools!'
+        },
+        {
+            role: 'reader',
+            content: 'What is the next step then?'
+        },
+        {
+            role: 'writer',
+            content: 'The next step is to install the haolib! Let me show you how to do it!'
+        }
+    ]
+} />
+
+HAO, wait, before we go to the installation guide, we have to give a brief overview of the haolib features...

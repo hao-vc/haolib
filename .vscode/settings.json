@@ -1,0 +1,8 @@
+{
+    "[mdx]": {
+        "editor.codeActionsOnSave": [
+            "source.fixAll",
+        ],
+        "editor.formatOnSave": true
+    }
+}

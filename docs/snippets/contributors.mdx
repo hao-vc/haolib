@@ -1,0 +1,159 @@
+export const Contributors = ({ contributors }) => (
+    <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+        gap: '2rem',
+        padding: '2rem 0',
+        perspective: '1000px'
+    }}>
+        {contributors.map((contributor, index) => (
+            <div
+                key={index}
+                style={{
+                    position: 'relative',
+                    background: 'rgba(20, 20, 25, 0.6)',
+                    backdropFilter: 'blur(10px)',
+                    borderRadius: '20px',
+                    padding: '2rem',
+                    transition: 'all 0.6s cubic-bezier(0.23, 1, 0.32, 1)',
+                    transformStyle: 'preserve-3d',
+                    cursor: 'pointer',
+                    overflow: 'visible',
+                    border: '1px solid rgba(0, 204, 139, 0.2)',
+                    boxShadow: '0 10px 30px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05)'
+                }}
+                onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = 'translateY(-15px) scale(1.02)';
+                    e.currentTarget.style.boxShadow = '0 25px 60px rgba(0, 0, 0, 0.5), 0 0 40px rgba(0, 204, 139, 0.4)';
+                    e.currentTarget.style.borderColor = 'rgba(0, 204, 139, 0.6)';
+                    const badge = e.currentTarget.querySelector('.badge');
+                    if (badge) {
+                        badge.style.opacity = '1';
+                        badge.style.transform = 'translateY(0) scale(1)';
+                    }
+                    const img = e.currentTarget.querySelector('.contributor-img');
+                    if (img) {
+                        img.style.borderColor = 'rgba(0, 204, 139, 0.8)';
+                        img.style.boxShadow = '0 0 40px rgba(0, 204, 139, 0.6)';
+                        img.style.transform = 'scale(1.05)';
+                    }
+                    const nameEl = e.currentTarget.querySelector('.name');
+                    if (nameEl) {
+                        nameEl.style.color = '#00CC8B';
+                        nameEl.style.textShadow = '0 0 20px rgba(0, 204, 139, 0.5)';
+                    }
+                    const descEl = e.currentTarget.querySelector('.desc');
+                    if (descEl) {
+                        descEl.style.color = 'rgba(255, 255, 255, 0.95)';
+                    }
+                }}
+                onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = 'translateY(0) scale(1)';
+                    e.currentTarget.style.boxShadow = '0 10px 30px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05)';
+                    e.currentTarget.style.borderColor = 'rgba(0, 204, 139, 0.2)';
+                    const badge = e.currentTarget.querySelector('.badge');
+                    if (badge) {
+                        badge.style.opacity = '0';
+                        badge.style.transform = 'translateY(-10px) scale(0.9)';
+                    }
+                    const img = e.currentTarget.querySelector('.contributor-img');
+                    if (img) {
+                        img.style.borderColor = 'rgba(0, 204, 139, 0.3)';
+                        img.style.boxShadow = '0 0 30px rgba(0, 204, 139, 0.3)';
+                        img.style.transform = 'scale(1)';
+                    }
+                    const nameEl = e.currentTarget.querySelector('.name');
+                    if (nameEl) {
+                        nameEl.style.color = '#ffffff';
+                        nameEl.style.textShadow = 'none';
+                    }
+                    const descEl = e.currentTarget.querySelector('.desc');
+                    if (descEl) {
+                        descEl.style.color = 'rgba(255, 255, 255, 0.65)';
+                    }
+                }}
+            >
+                <div
+                    className="badge"
+                    style={{
+                        position: 'absolute',
+                        top: '1rem',
+                        right: '1rem',
+                        background: 'linear-gradient(135deg, #00CC8B 0%, #15803D 100%)',
+                        padding: '0.5rem 1rem',
+                        borderRadius: '50px',
+                        fontSize: '0.75rem',
+                        fontWeight: '600',
+                        textTransform: 'uppercase',
+                        letterSpacing: '1px',
+                        opacity: '0',
+                        transform: 'translateY(-10px) scale(0.9)',
+                        transition: 'all 0.6s cubic-bezier(0.23, 1, 0.32, 1)',
+                        boxShadow: '0 5px 15px rgba(0, 204, 139, 0.4)',
+                        color: 'white',
+                        zIndex: 10
+                    }}
+                >
+                    {index === 0 ? '🏆 The Greatest Contributor EVER' : `#${index + 1} Contributor`}
+                </div>
+
+                <div style={{
+                    position: 'relative',
+                    width: '120px',
+                    height: '120px',
+                    margin: '0 auto 1.5rem',
+                    transition: 'all 0.6s cubic-bezier(0.23, 1, 0.32, 1)'
+                }}>
+                    <img
+                        className="contributor-img"
+                        src={contributor.picture}
+                        alt={contributor.name}
+                        style={{
+                            width: '100%',
+                            height: '100%',
+                            borderRadius: '50%',
+                            objectFit: 'cover',
+                            border: '4px solid rgba(0, 204, 139, 0.3)',
+                            position: 'relative',
+                            zIndex: 1,
+                            transition: 'all 0.4s ease',
+                            boxShadow: '0 0 30px rgba(0, 204, 139, 0.3)',
+                            transform: 'scale(1)'
+                        }}
+                    />
+                </div>
+
+                <div style={{
+                    textAlign: 'center',
+                    transition: 'all 0.6s cubic-bezier(0.23, 1, 0.32, 1)'
+                }}>
+                    <h3
+                        className="name"
+                        style={{
+                            fontSize: '1.5rem',
+                            fontWeight: '700',
+                            marginBottom: '0.5rem',
+                            color: '#ffffff',
+                            transition: 'all 0.4s ease',
+                            textShadow: 'none'
+                        }}
+                    >
+                        {contributor.name}
+                    </h3>
+                    <p
+                        className="desc"
+                        style={{
+                            fontSize: '0.95rem',
+                            lineHeight: '1.6',
+                            color: 'rgba(255, 255, 255, 0.65)',
+                            margin: 0,
+                            transition: 'all 0.4s ease'
+                        }}
+                    >
+                        {contributor.description}
+                    </p>
+                </div>
+            </div>
+        ))}
+    </div>
+);

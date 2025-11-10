@@ -1,0 +1,12 @@
+export const Exercises = ({ exercises }) => (
+    <div>
+        <h2>Exercises</h2>
+        <AccordionGroup>
+            {exercises.map((exercise) => (
+                <Accordion title={exercise.question}>
+                    <p>{exercise.answer}</p>
+                </Accordion>
+            ))}
+        </AccordionGroup>
+    </div>
+);

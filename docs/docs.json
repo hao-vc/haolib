@@ -1,63 +1,345 @@
 {
   "$schema": "https://mintlify.com/docs.json",
   "theme": "mint",
-  "name": "HAOlib",
+  "name": "haolib",
   "colors": {
     "primary": "#00CC8B",
     "light": "#07C983",
     "dark": "#15803D"
   },
+  "background": {
+    "decoration": "windows",
+    "color": {
+      "light": "#FAFAFA",
+      "dark": "#0A0A0A"
+    }
+  },
+  "appearance": {
+    "modeToggle": {
+      "default": "system"
+    }
+  },
   "favicon": "/favicon.svg",
   "navigation": {
-    "tabs": [
+    "products": [
       {
-        "tab": "Guides",
+        "product": "READ THIS FIRST",
+        "description": "Read this first before you start using haolib",
+        "icon": "book",
         "groups": [
           {
-            "group": "Getting started",
+            "group": "Getting Started",
+            "icon": "rocket",
             "pages": [
               "index",
-              "quickstart",
-              "development"
-            ]
-          },
-          {
-            "group": "Customization",
-            "pages": [
-              "essentials/settings",
-              "essentials/navigation"
-            ]
-          },
-          {
-            "group": "Writing content",
-            "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
-            ]
-          },
-          {
-            "group": "AI tools",
-            "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
+              "essentials/whatisnext",
+              "essentials/projectmap",
+              "essentials/installation",
+              "essentials/philosophy"
             ]
           }
         ]
       },
       {
-        "tab": "API reference",
+        "product": "Security",
+        "description": "Authentication, JWT, encryption, and password management",
+        "icon": "shield-check",
         "groups": [
           {
-            "group": "API documentation",
+            "group": "Introduction",
+            "pages": [
+              "security/introduction",
+              "security/fastapi"
+            ]
+          },
+          {
+            "group": "StackAuth",
+            "pages": [
+              "security/stackauth/introduction",
+              "security/stackauth/abstract",
+              "security/stackauth/pyjwt"
+            ]
+          },
+          {
+            "group": "StackAuth JWK",
+            "pages": [
+              "security/stackauth/jwk/introduction",
+              "security/stackauth/jwk/abstract",
+              "security/stackauth/jwk/pyjwt"
+            ]
+          },
+          {
+            "group": "JWT",
+            "pages": [
+              "security/jwt/introduction",
+              {
+                "group": "Encoders",
+                "pages": [
+                  "security/jwt/encoders/abstract",
+                  "security/jwt/encoders/pyjwt"
+                ]
+              }
+            ]
+          },
+          {
+            "group": "Encryption",
+            "pages": [
+              "security/encryption/abstract",
+              "security/encryption/fernet"
+            ]
+          },
+          {
+            "group": "Passwords",
+            "pages": [
+              "security/passwords",
+              "security/passwords/abstract",
+              "security/passwords/bcrypt"
+            ]
+          },
+          {
+            "group": "Security Utils",
+            "pages": [
+              "security/utils/introduction",
+              "security/utils/pyjwt"
+            ]
+          }
+        ]
+      },
+      {
+        "product": "Database",
+        "description": "Database models, specifications, and transactions",
+        "icon": "database",
+        "groups": [
+          {
+            "group": "Database",
+            "pages": [
+              "database/introduction",
+              "database/specification",
+              "database/transactions"
+            ]
+          },
+          {
+            "group": "Models",
+            "pages": [
+              "database/models/mapped",
+              {
+                "group": "Base Models",
+                "pages": [
+                  "database/models/base/introduction",
+                  "database/models/base/sqlalchemy"
+                ]
+              },
+              {
+                "group": "Mapped Models",
+                "pages": [
+                  "database/models/mapped/abstract",
+                  "database/models/mapped/sqlalchemy"
+                ]
+              },
+              {
+                "group": "Model Mixins",
+                "pages": [
+                  "database/models/mixins/introduction",
+                  "database/models/mixins/sqlalchemy"
+                ]
+              }
+            ]
+          },
+          {
+            "group": "Specification",
+            "pages": [
+              "database/specification/introduction",
+              "database/specification/base",
+              "database/specification/sqlalchemy"
+            ]
+          },
+          {
+            "group": "Transactions",
+            "pages": [
+              "database/transactions/introduction",
+              "database/transactions/abstract",
+              "database/transactions/sqlalchemy"
+            ]
+          }
+        ]
+      },
+      {
+        "product": "Observability",
+        "description": "Logging, monitoring, and observability",
+        "icon": "chart-line",
+        "groups": [
+          {
+            "group": "Introduction",
+            "pages": [
+              "observability/introduction"
+            ]
+          },
+          {
+            "group": "Settuper",
+            "pages": [
+              "observability/setupper"
+            ]
+          }
+        ]
+      },
+      {
+        "product": "Core",
+        "description": "Core modules: batches, configs, dependencies, entities, entrypoints, enums, exceptions, and utils",
+        "icon": "cube",
+        "groups": [
+          {
+            "group": "Batches",
+            "pages": [
+              "batches/introduction",
+              "batches/abstract",
+              "batches/batch",
+              "batches/mapped",
+              "batches/sqlalchemy"
+            ]
+          },
+          {
+            "group": "Configs",
+            "pages": [
+              "configs/introduction",
+              "configs/base",
+              "configs/cors",
+              "configs/idempotency",
+              "configs/jwt",
+              "configs/observability",
+              "configs/redis",
+              "configs/server",
+              "configs/sqlalchemy"
+            ]
+          },
+          {
+            "group": "Dependencies",
+            "pages": [
+              "dependencies/introduction"
+            ]
+          },
+          {
+            "group": "Dishka",
+            "pages": [
+              "dependencies/dishka/introduction",
+              "dependencies/dishka/redis",
+              "dependencies/dishka/sqlalchemy"
+            ]
+          },
+          {
+            "group": "Entities",
+            "pages": [
+              "entities/introduction"
+            ]
+          },
+          {
+            "group": "Base Entities",
+            "pages": [
+              "entities/base/introduction",
+              "entities/base/create",
+              "entities/base/read",
+              "entities/base/update",
+              "entities/base/delete",
+              "entities/base/mixins"
+            ]
+          },
+          {
+            "group": "Entrypoints",
+            "pages": [
+              "entrypoints/introduction",
+              "entrypoints/abstract",
+              "entrypoints/fastapi",
+              "entrypoints/fastmcp",
+              "entrypoints/faststream",
+              "entrypoints/taskiq"
+            ]
+          },
+          {
+            "group": "Enums",
+            "pages": [
+              "enums/introduction",
+              "enums/base",
+              "enums/filter"
+            ]
+          },
+          {
+            "group": "Exceptions",
+            "pages": [
+              "exceptions/introduction"
+            ]
+          },
+          {
+            "group": "Base Exceptions",
+            "pages": [
+              "exceptions/base/introduction",
+              "exceptions/base/abstract",
+              "exceptions/base/fastapi"
+            ]
+          },
+          {
+            "group": "Exception Handlers",
+            "pages": [
+              "exceptions/handlers/introduction",
+              "exceptions/handlers/fastapi"
+            ]
+          },
+          {
+            "group": "Exception Schemas",
+            "pages": [
+              "exceptions/schemas/introduction",
+              "exceptions/schemas/fastapi"
+            ]
+          },
+          {
+            "group": "Utils",
+            "pages": [
+              "utils/introduction",
+              "utils/rattrs",
+              "utils/strings"
+            ]
+          }
+        ]
+      },
+      {
+        "product": "Web",
+        "description": "Web-specific features including idempotency",
+        "icon": "globe",
+        "groups": [
+          {
+            "group": "Web",
+            "pages": [
+              "web/introduction"
+            ]
+          },
+          {
+            "group": "Idempotency",
+            "pages": [
+              "web/idempotency/introduction",
+              "web/idempotency/fastapi"
+            ]
+          },
+          {
+            "group": "Idempotency Storages",
+            "pages": [
+              "web/idempotency/storages/introduction",
+              "web/idempotency/storages/abstract",
+              "web/idempotency/storages/redis"
+            ]
+          }
+        ]
+      },
+      {
+        "product": "API Reference",
+        "description": "API documentation and endpoint examples",
+        "icon": "code",
+        "groups": [
+          {
+            "group": "API Documentation",
             "pages": [
               "api-reference/introduction"
             ]
           },
           {
-            "group": "Endpoint examples",
+            "group": "Endpoint Examples",
             "pages": [
               "api-reference/endpoint/get",
               "api-reference/endpoint/create",
@@ -68,36 +350,34 @@
         ]
       }
     ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
+    "anchors": [
+      {
+        "anchor": "GitHub",
+        "href": "https://github.com/hao-vc/haolib",
+        "icon": "github"
+      },
+      {
+        "anchor": "Website",
+        "href": "https://hao.vc",
+        "icon": "globe"
+      },
+      {
+        "anchor": "Telegram",
+        "href": "https://t.me/hao_vc",
+        "icon": "telegram"
+      }
+    ]
   },
   "logo": {
     "light": "/logo/light.svg",
     "dark": "/logo/dark.svg"
   },
   "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
+    "links": [],
     "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
+      "type": "github",
+      "label": "haovc/haolib",
+      "href": "https://github.com/hao-vc/haolib"
     }
   },
   "contextual": {
@@ -114,9 +394,9 @@
   },
   "footer": {
     "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
+      "website": "https://hao.vc",
+      "github": "https://github.com/hao-vc/haolib",
+      "telegram": "https://t.me/hao_vc"
     }
   }
 }

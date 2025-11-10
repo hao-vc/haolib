@@ -1,0 +1,121 @@
+---
+title: 'Installation'
+description: 'How to install haolib'
+icon: 'download'
+---
+
+import { Exercises } from '/snippets/exercises.mdx';
+import { Dialogue } from '/snippets/dialogue.mdx';
+
+
+
+
+## Using [uv](https://docs.astral.sh/uv/) (the only recommended way <Tooltip tip="'So far' because haolib is designed to ALWAYS BE SOTA!">so far</Tooltip>)
+
+
+<Dialogue dialogue={
+    [
+        {
+            role: 'reader',
+            content: 'First, why is it recommended to use uv?'
+        },
+        {
+            role: 'writer',
+            content: 'I know why! Because uv is probably the best Python package manager overall so far!'
+        }
+    ]
+} />
+
+HAO, you are absolutely right! uv is really a SOTA package manager for Python! We definitely need to use it!
+
+<Dialogue dialogue={
+    [
+        {
+            role: 'reader',
+            content: 'Still, what about other package managers?'
+        },
+        {
+            role: 'writer',
+            content: 'MEOW! Other package managers are not SOTA, uv is SOTA! I love SOTA!'
+        }
+    ]
+} />
+
+Well... Yes, HAO is mostly right, but you probably don't need to think that radical about the tools we consider SOTA. Again, we are human beings and... Oops! Well, not only human beings... Carbon-based lifeforms, so to say, and we are not perfect. So all our recommendations are based on our own experience of testing different tools and frameworks, so we selected those tools that we think are SOTA. If you think otherwise, you can always contribute to haolib and improve it the way you think real SOTA must be.
+
+
+## The ways to install haolib:
+
+First, you have to understand the concept of [optional dependencies](https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#dependencies-optional-dependencies) in Python.
+
+Since haolib is a monolith, it's might be not the best idea to install it with all the dependencies, including the ones useless for your project. So we have to use optional dependencies.
+
+HAO, do you know what optional dependencies are?
+
+<Dialogue dialogue={
+    [
+        {
+            role: 'writer',
+            content: 'Optional dependencies are dependencies that are part of the project, but can be installed only if needed. For example, some libraries might utilize different message brokers like Kafka or RabbitMQ, but you most likely will not need them both in your project. So you can install only the one you need.'
+        }
+    ]
+} />
+
+
+Absolutely! Now let's see how we can install haolib using the optional dependencies feature.
+
+
+```bash shell
+uv add git+https://github.com/hao-vc/haolib[fastapi,sqlalchemy,security]
+```
+
+In this example, we are installing haolib with the following dependencies:
+- fastapi (the full FastAPI integration)
+- sqlalchemy (the full SQLAlchemy integration)
+- security (the security pack, including [JWT](https://en.wikipedia.org/wiki/JSON_Web_Token) (with [PyJWT](https://pyjwt.readthedocs.io/en/stable/)),
+password hashing (with [bcrypt](https://en.wikipedia.org/wiki/Bcrypt)), symmetric Fernet encryption (with [pyca/cryptography](https://cryptography.io/en/latest/)), and [more](/essentials/security))
+
+
+## The full list of optional dependencies:
+
+- `dishka` - [Dishka](https://dishka.readthedocs.io/en/stable/index.html) integration
+- `fastapi` - [FastAPI](https://fastapi.tiangolo.com/) integration
+- `faststream` - [FastStream](https://faststream.dev/) integration
+- `fastmcp` - [FastMCP](https://fastmcp.readthedocs.io/en/stable/index.html) integration
+- `sqlalchemy` - [SQLAlchemy](https://www.sqlalchemy.org/) integration
+- `security` - the security pack, including [JWT](https://en.wikipedia.org/wiki/JSON_Web_Token) (with [PyJWT](https://pyjwt.readthedocs.io/en/stable/)),
+password hashing (with [bcrypt](https://en.wikipedia.org/wiki/Bcrypt)), symmetric Fernet encryption (with [pyca/cryptography](https://cryptography.io/en/latest/)), and [more](/essentials/security))
+- `redis` - [Redis](https://redis.io/docs/latest/develop/clients/redis-py/) integration
+- `taskiq` - [TaskIQ](https://taskiq-python.github.io/) integration
+- `observability` - the observability pack, including [OpenTelemetry](https://opentelemetry.io/) for distributed tracing and monitoring
+
+
+## How to understand that installation was successful?
+
+Well, despite the fact that uv will show an error message if something goes wrong, the next lines should appear in your `pyproject.toml` file:
+
+```toml title="pyproject.toml"
+[tool.uv.sources]
+haolib = { git = "https://github.com/hao-vc/haolib" }
+
+```
+
+
+Now you can use haolib in your project.
+
+
+<Exercises exercises={
+    [
+        {
+            question: 'Why is uv the only recommended way to install haolib?',
+            answer: 'Because it is SOTA package manager for Python. And haolib is designed to be SOTA!'
+        },
+        {
+            question: 'What is the difference between a "framework" and a "library"?',
+            answer: 'The first one is more rigid and provides less freedom, but also less responsibility to the user.'
+        },
+        {
+            question: 'What is "SOTA"?',
+            answer: 'It stands for "State of the Art".'
+        },
+    ]} />

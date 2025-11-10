@@ -1,97 +1,38 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "READ THIS NO MATTER WHAT, SERIOUSLY!!!"
+description: "A couple of warnings before you start"
+icon: 'warning'
 ---
 
-## Setting up
+import { Contributors } from '/snippets/contributors.mdx';
 
-Get your documentation site up and running in minutes.
+## Important considerations before you start
 
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
+- **This is a work in progress project, please don't expect it to be perfect**
 
-## Make it yours
+- **The API is not yet stable, please make sure you lock the version of the library before using it in production**
 
-Design a docs site that looks great and empowers your users.
+- **haolib IS already used in production by [hao.vc](https://hao.vc), so you do not need to worry about the risk of the project being abandoned.
+The problem is exactly the opposite: it is too new and we are still adding new features, fixing bugs and changing the API.**
 
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
-  </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
-  </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
-  </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
-  </Card>
-</Columns>
 
-## Create beautiful pages
+If you are ok with the above, let's get started!
 
-Everything you need to create world-class documentation.
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
+## Top contributors
 
-## Need inspiration?
-
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+<Contributors contributors={
+  [
+    {
+      name: 'HAO',
+      picture: '/hao.png',
+      description: 'HAO cat, the avatar of HAO.VC'
+    }
+    ,
+    {
+      name: 'Kamil Biktimirov',
+      picture: 'https://hao.vc/assets/kamil-biktimirov-TG-oknG-.jpg',
+      description: 'CTO and Co-founder of hao.vc; Some Kind Of Programmers Founder; The creator and maintainer of haolib'
+    }
+  ]
+} />
