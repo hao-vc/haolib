@@ -1,10 +1,13 @@
 """FastAPI entrypoint."""
 
-from typing import TYPE_CHECKING, Any, Self
+from collections.abc import Awaitable, Callable
+from typing import TYPE_CHECKING, Any, Self, cast
 
 from dishka import AsyncContainer, Scope
 from dishka.integrations.fastapi import setup_dishka as setup_dishka_fastapi
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from uvicorn import Config, Server
 
 from haolib.configs.cors import CORSConfig
@@ -13,6 +16,12 @@ from haolib.entrypoints.abstract import AbstractEntrypoint, EntrypointInconsiste
 from haolib.exceptions.base.fastapi import FastAPIBaseException
 from haolib.exceptions.handlers.fastapi import fastapi_base_exception_handler, fastapi_unknown_exception_handler
 from haolib.observability.setupper import ObservabilitySetupper
+from haolib.web.health.core.checker import AbstractHealthChecker
+from haolib.web.health.handlers.fastapi import (
+    FastAPIHealthCheckResponse,
+    HealthCheckConfig,
+    fastapi_health_check_handler_factory,
+)
 from haolib.web.idempotency.fastapi import (
     fastapi_default_idempotency_response_factory,
     fastapi_idempotency_middleware_handler,
@@ -20,10 +29,6 @@ from haolib.web.idempotency.fastapi import (
 from haolib.web.idempotency.storages.abstract import AbstractIdempotencyKeysStorage
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable
-
-    from fastapi import FastAPI, Request, Response
-
     from haolib.entrypoints.fastmcp import FastMCPEntrypointComponent
     from haolib.entrypoints.faststream import FastStreamEntrypointComponent
 
@@ -105,6 +110,84 @@ class FastAPIEntrypoint(AbstractEntrypoint):
 
         for exception, handler in exception_handlers.items():
             self._app.add_exception_handler(exception, handler)
+
+        return self
+
+    def setup_health_check(
+        self,
+        health_checkers: list[AbstractHealthChecker] | None = None,
+        config: HealthCheckConfig | None = None,
+    ) -> Self:
+        """Setup health check endpoint.
+
+        Args:
+            health_checkers: List of health checkers to execute. If None, endpoint returns healthy.
+            config: Configuration for the health check endpoint.
+                If None, uses default configuration.
+                See `haolib.web.health.handlers.fastapi.HealthCheckConfig` for details.
+
+        Example:
+            ```python
+            from haolib.web.health.handlers.fastapi import HealthCheckConfig
+
+            entrypoint.setup_health_check(
+                health_checkers=[db_checker, redis_checker],
+                config=HealthCheckConfig(
+                    route_path="/health",
+                    timeout_seconds=5.0,
+                    status_code_unhealthy=503,
+                )
+            )
+            ```
+
+        """
+        if config is None:
+            config = HealthCheckConfig()
+
+        handler = fastapi_health_check_handler_factory(checkers=health_checkers, config=config)
+
+        # Define responses for OpenAPI specification
+        # Include all possible status codes with the same response model
+        # FastAPI will use response_model for schema, responses dict is for documentation
+        responses = cast(
+            "dict[int | str, dict[str, Any]]",
+            {
+                config.status_code_healthy: {
+                    "description": "Service is healthy",
+                },
+                config.status_code_unhealthy: {
+                    "description": "Service is unhealthy",
+                },
+                config.status_code_degraded: {
+                    "description": "Service is degraded",
+                },
+            },
+        )
+
+        # Map status values to HTTP status codes
+        status_code_map = {
+            "healthy": config.status_code_healthy,
+            "unhealthy": config.status_code_unhealthy,
+            "degraded": config.status_code_degraded,
+        }
+
+        @self._app.get(
+            config.route_path,
+            response_model=FastAPIHealthCheckResponse,
+            responses=responses,
+            summary="Health check",
+            description="Check the health status of the service and its dependencies",
+            tags=["health"],
+        )
+        async def health_handler(request: Request) -> JSONResponse:
+            """Health check endpoint."""
+            response_data = await handler(request)
+            status_code = status_code_map.get(response_data.status, config.status_code_healthy)
+
+            return JSONResponse(
+                content=response_data.model_dump(),
+                status_code=status_code,
+            )
 
         return self
 

@@ -1,0 +1,1 @@
+"""Health handlers module."""
