@@ -1,26 +1,27 @@
 """FastStream entrypoint."""
 
 import logging
-from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, Self
-
-from dishka.integrations.faststream import setup_dishka
-from faststream._internal.broker import BrokerUsecase as BrokerType
-from faststream.middlewares.exception import ExceptionMiddleware
-from faststream.opentelemetry import TelemetryMiddleware
 
 from haolib.entrypoints.abstract import (
     AbstractEntrypoint,
-    AbstractEntrypointComponent,
     EntrypointInconsistencyError,
 )
+from haolib.entrypoints.plugins.base import EntrypointPlugin, PluginPreset
+from haolib.entrypoints.plugins.helpers import (
+    apply_plugin,
+    apply_preset,
+    call_plugin_shutdown_hooks,
+    call_plugin_startup_hooks,
+    validate_plugins,
+)
+from haolib.entrypoints.plugins.registry import PluginRegistry
 from haolib.enums.base import BaseEnum
 from haolib.observability.setupper import ObservabilitySetupper
 
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    from dishka import AsyncContainer
     from faststream import FastStream
     from faststream._internal.broker import BrokerUsecase as BrokerType
 
@@ -88,198 +89,35 @@ def _setup_observability_to_broker(
         broker.add_middleware(RedisTelemetryMiddleware(tracer_provider=tracer_provider))
 
 
-class FastStreamEntrypointComponent(AbstractEntrypointComponent):
-    """FastStream entrypoint component for integration with other entrypoints.
-
-    This component provides a standardized interface for integrating FastStream
-    brokers with other entrypoint types (e.g., FastAPI). It encapsulates broker
-    configuration and provides integration hooks.
-
-    Example:
-        ```python
-        from faststream.confluent import KafkaBroker
-
-        broker = KafkaBroker()
-        component = (
-            FastStreamEntrypointComponent(broker=broker)
-            .setup_dishka(container)
-            .setup_observability(observability, FastStreamEntrypointBrokerType.CONFLUENT)
-        )
-
-        fastapi_entrypoint.setup_faststream(component)
-        ```
-
-    Attributes:
-        _broker: The FastStream broker instance.
-
-    """
-
-    def __init__(self, broker: BrokerType[Any, Any]) -> None:
-        """Initialize the FastStream entrypoint component.
-
-        Args:
-            broker: The FastStream broker instance to wrap.
-
-        """
-        self._broker = broker
-
-    def validate(self) -> None:
-        """Validate FastStream component configuration.
-
-        Validates that the component is properly configured and ready for use.
-
-        Raises:
-            EntrypointInconsistencyError: If component configuration is invalid.
-
-        """
-        # Broker is guaranteed by type system (required in __init__)
-        # No validation needed
-
-    def setup_dishka(self, container: AsyncContainer) -> Self:
-        """Setup Dishka dependency injection for the broker.
-
-        Configures Dishka to work with the FastStream broker, enabling
-        dependency injection in message handlers.
-
-        Args:
-            container: The Dishka async container instance.
-
-        Returns:
-            Self for method chaining.
-
-        """
-        setup_dishka(container=container, broker=self._broker)
-
-        return self
-
-    def setup_telemetry_middleware(self, telemetry_middleware: TelemetryMiddleware) -> Self:
-        """Setup custom telemetry middleware.
-
-        Adds a custom TelemetryMiddleware to the broker. Use this if you need
-        to use your own telemetry middleware instead of the default observability setup.
-
-        Args:
-            telemetry_middleware: The telemetry middleware instance to add.
-
-        Returns:
-            Self for method chaining.
-
-        Example:
-            ```python
-            from faststream.opentelemetry import TelemetryMiddleware
-
-            middleware = TelemetryMiddleware(tracer_provider=my_tracer_provider)
-            component.setup_telemetry_middleware(middleware)
-            ```
-
-        """
-        self._broker.add_middleware(telemetry_middleware)
-        return self
-
-    def setup_observability(
-        self, observability_settuper: ObservabilitySetupper, broker_type: FastStreamEntrypointBrokerType
-    ) -> Self:
-        """Setup observability for the broker.
-
-        Configures OpenTelemetry tracing for the FastStream broker based on
-        the broker type. This automatically adds the appropriate telemetry
-        middleware for the specified broker.
-
-        Args:
-            observability_settuper: The observability setupper instance.
-                See `haolib.observability.setupper.ObservabilitySetupper` for more details.
-            broker_type: The type of the broker (Kafka, RabbitMQ, NATS, etc.).
-
-        Returns:
-            Self for method chaining.
-
-        Raises:
-            EntrypointInconsistencyError: If tracer provider is not set in observability setupper.
-
-        Example:
-            ```python
-            observability = ObservabilitySetupper().setup_tracing()
-            component.setup_observability(
-                observability,
-                FastStreamEntrypointBrokerType.CONFLUENT
-            )
-            ```
-
-        """
-        _setup_observability_to_broker(observability_settuper, broker_type, self._broker)
-
-        return self
-
-    def setup_exception_handlers(self, exception_handlers: dict[type[Exception], Callable[..., Any]]) -> Self:
-        """Setup exception handlers for the broker.
-
-        Configures exception handling middleware for the FastStream broker.
-        Handlers are called when exceptions occur during message processing.
-
-        Args:
-            exception_handlers: Dictionary mapping exception types to handler functions.
-                Handlers receive the exception and can perform logging, retries, etc.
-
-        Returns:
-            Self for method chaining.
-
-        Raises:
-            EntrypointInconsistencyError: If broker is not set.
-
-        Example:
-            ```python
-            def handle_value_error(exc: ValueError):
-                logger.error(f"Value error: {exc}")
-
-            component.setup_exception_handlers({
-                ValueError: handle_value_error
-            })
-            ```
-
-        """
-
-        self._broker.add_middleware(ExceptionMiddleware(publish_handlers=exception_handlers))
-
-        return self
-
-    def get_broker(self) -> BrokerType[Any, Any]:
-        """Get the FastStream broker instance.
-
-        Returns:
-            The FastStream broker instance.
-
-        """
-        return self._broker
-
-
 class FastStreamEntrypoint(AbstractEntrypoint):
-    """FastStream entrypoint implementation.
+    """FastStream entrypoint implementation with plugin system.
 
     Provides a builder-pattern interface for configuring and running FastStream
-    applications with features like dependency injection, observability, and
-    exception handling.
+    applications using plugins for common features like dependency injection,
+    observability, and exception handling.
 
     Example:
         ```python
         from faststream import FastStream
         from faststream.confluent import KafkaBroker
+        from haolib.entrypoints.plugins.faststream import (
+            FastStreamDishkaPlugin,
+            FastStreamObservabilityPlugin,
+        )
 
         broker = KafkaBroker()
         app = FastStream(broker=broker)
 
         entrypoint = (
             FastStreamEntrypoint(app=app)
-            .setup_dishka(container)
-            .setup_observability(observability, FastStreamEntrypointBrokerType.CONFLUENT)
+            .use_plugin(FastStreamDishkaPlugin(container))
+            .use_plugin(
+                FastStreamObservabilityPlugin(observability, FastStreamEntrypointBrokerType.CONFLUENT)
+            )
         )
 
         await entrypoint.run()
         ```
-
-    Attributes:
-        _app: The FastStream application instance.
-        _run_args: Positional arguments to pass to app.run().
-        _run_kwargs: Keyword arguments to pass to app.run().
 
     """
 
@@ -300,13 +138,45 @@ class FastStreamEntrypoint(AbstractEntrypoint):
         self._run_args = args
         self._run_kwargs = kwargs
         self._app: FastStream = app
+        self._plugins: list[EntrypointPlugin[Self]] = []
+        self._plugin_registry = PluginRegistry()
+
+    def use_plugin(self, plugin: EntrypointPlugin[Self]) -> Self:
+        """Add and apply a plugin to the entrypoint.
+
+        Plugins are applied immediately and stored for lifecycle hooks.
+
+        Args:
+            plugin: The plugin to add and apply.
+
+        Returns:
+            Self for method chaining.
+
+        Example:
+            ```python
+            entrypoint = FastStreamEntrypoint(app=app).use_plugin(FastStreamDishkaPlugin(container))
+            ```
+
+        """
+        return apply_plugin(self, plugin, self._plugins, self._plugin_registry)
+
+    def use_preset(self, preset: PluginPreset[Self]) -> Self:
+        """Add and apply a plugin preset to the entrypoint.
+
+        Args:
+            preset: The plugin preset to apply.
+
+        Returns:
+            Self for method chaining.
+
+        """
+        return apply_preset(self, preset, self._plugins, self._plugin_registry)
 
     def validate(self) -> None:
         """Validate FastStream entrypoint configuration.
 
         Validates that the entrypoint is properly configured and all required
-        dependencies are available. Specifically checks:
-        - Broker is configured in the app (runtime state validation)
+        dependencies are available. Also validates all plugins.
 
         Raises:
             EntrypointInconsistencyError: If configuration is invalid or
@@ -317,11 +187,26 @@ class FastStreamEntrypoint(AbstractEntrypoint):
         if self._app.broker is None:
             raise EntrypointInconsistencyError("FastStream broker is not configured in the app.")
 
+        validate_plugins(self, self._plugins)
+
+    @property
+    def plugin_registry(self) -> PluginRegistry:
+        """Get the plugin registry for plugin discovery.
+
+        Provides read-only access to the plugin registry, allowing plugins
+        to discover other plugins without accessing private attributes.
+
+        Returns:
+            The plugin registry instance.
+
+        """
+        return self._plugin_registry
+
     async def startup(self) -> None:
         """Startup the FastStream entrypoint.
 
-        Prepares the FastStream application for execution. This method is called
-        before run() and should be idempotent.
+        Prepares the FastStream application for execution. Calls startup hooks for all plugins.
+        This method is called before run() and should be idempotent.
 
         Raises:
             EntrypointInconsistencyError: If configuration is invalid.
@@ -331,43 +216,22 @@ class FastStreamEntrypoint(AbstractEntrypoint):
 
         logger.info("FastStream entrypoint starting")
 
+        await call_plugin_startup_hooks(self, self._plugins)
+
     async def shutdown(self) -> None:
         """Shutdown the FastStream entrypoint.
 
-        Cleans up resources and stops the FastStream application. This method
-        is called after run() completes or is cancelled. Should be idempotent
+        Cleans up resources and stops the FastStream application. Calls shutdown hooks for all plugins.
+        This method is called after run() completes or is cancelled. Should be idempotent
         and safe to call multiple times.
 
         """
+        await call_plugin_shutdown_hooks(self, self._plugins)
+
         if self._app is not None:
             logger.info("Shutting down FastStream entrypoint")
             # FastStream handles cleanup automatically when run() is cancelled
             # Additional cleanup can be added here if needed
-
-    def setup_dishka(self, container: AsyncContainer) -> Self:
-        """Setup Dishka dependency injection.
-
-        Configures Dishka to work with the FastStream application, enabling
-        dependency injection in message handlers.
-
-        Args:
-            container: The Dishka async container instance.
-
-        Returns:
-            Self for method chaining.
-
-        Example:
-            ```python
-            from dishka import make_async_container
-
-            container = make_async_container(...)
-            entrypoint.setup_dishka(container)
-            ```
-
-        """
-        setup_dishka(container=container, app=self._app, finalize_container=False)
-
-        return self
 
     def get_app(self) -> FastStream:
         """Get the FastStream application instance.
@@ -381,77 +245,7 @@ class FastStreamEntrypoint(AbstractEntrypoint):
         """
         if self._app is None:
             raise EntrypointInconsistencyError("FastStream app is not set.")
-
         return self._app
-
-    def setup_exception_handlers(self, exception_handlers: dict[type[Exception], Callable[..., Any]]) -> Self:
-        """Setup exception handlers for the FastStream broker.
-
-        Configures exception handling middleware for message processing.
-        Handlers are called when exceptions occur during message handling.
-
-        Args:
-            exception_handlers: Dictionary mapping exception types to handler functions.
-
-        Returns:
-            Self for method chaining.
-
-        Raises:
-            EntrypointInconsistencyError: If broker is not configured.
-
-        Example:
-            ```python
-            def handle_error(exc: Exception):
-                logger.error(f"Error: {exc}")
-
-            entrypoint.setup_exception_handlers({
-                ValueError: handle_error
-            })
-            ```
-
-        """
-        if self._app.broker is None:
-            raise EntrypointInconsistencyError("FastStream broker is not set.")
-
-        self._app.broker.add_middleware(ExceptionMiddleware(publish_handlers=exception_handlers))
-
-        return self
-
-    def setup_observability(
-        self, observability_settuper: ObservabilitySetupper, broker_type: FastStreamEntrypointBrokerType
-    ) -> Self:
-        """Setup observability for the FastStream broker.
-
-        Configures OpenTelemetry tracing for the broker based on the broker type.
-        This automatically adds the appropriate telemetry middleware.
-
-        Args:
-            observability_settuper: The observability setupper instance.
-                See `haolib.observability.setupper.ObservabilitySetupper` for more details.
-            broker_type: The type of the broker (Kafka, RabbitMQ, NATS, etc.).
-
-        Returns:
-            Self for method chaining.
-
-        Raises:
-            EntrypointInconsistencyError: If broker is not configured or tracer provider is not set.
-
-        Example:
-            ```python
-            observability = ObservabilitySetupper().setup_tracing()
-            entrypoint.setup_observability(
-                observability,
-                FastStreamEntrypointBrokerType.CONFLUENT
-            )
-            ```
-
-        """
-        if self._app.broker is None:
-            raise EntrypointInconsistencyError("FastStream broker is not set.")
-
-        _setup_observability_to_broker(observability_settuper, broker_type, self._app.broker)
-
-        return self
 
     async def run(self) -> None:
         """Run the FastStream entrypoint.

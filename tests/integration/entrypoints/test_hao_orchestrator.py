@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from haolib.entrypoints import HAO
+from haolib.entrypoints import HAOrchestrator
 from haolib.entrypoints.abstract import AbstractEntrypoint, EntrypointInconsistencyError
 
 
@@ -40,20 +40,20 @@ class TestHAOAddEntrypoint:
 
     def test_add_entrypoint_returns_self(self, fastapi_entrypoint: AbstractEntrypoint) -> None:
         """Test that add_entrypoint returns self for chaining."""
-        hao = HAO()
+        hao = HAOrchestrator()
         result = hao.add_entrypoint(fastapi_entrypoint)
         assert result is hao
 
     def test_add_entrypoint_validates_entrypoint(self, fastapi_entrypoint: AbstractEntrypoint) -> None:
         """Test that add_entrypoint validates the entrypoint."""
-        hao = HAO()
+        hao = HAOrchestrator()
         hao.add_entrypoint(fastapi_entrypoint)  # Should not raise
 
     def test_add_entrypoint_chaining(
         self, fastapi_entrypoint: AbstractEntrypoint, fastmcp_entrypoint: AbstractEntrypoint
     ) -> None:
         """Test that add_entrypoint can be chained."""
-        hao = HAO()
+        hao = HAOrchestrator()
         hao.add_entrypoint(fastapi_entrypoint).add_entrypoint(fastmcp_entrypoint)
 
 
@@ -63,13 +63,13 @@ class TestHAORunEntrypoints:
     @pytest.mark.asyncio
     async def test_run_entrypoints_with_empty_list(self) -> None:
         """Test that run_entrypoints handles empty list gracefully."""
-        hao = HAO()
+        hao = HAOrchestrator()
         await hao.run_entrypoints([])  # Should not raise
 
     @pytest.mark.asyncio
     async def test_run_entrypoints_with_single_entrypoint(self, fastapi_entrypoint: AbstractEntrypoint) -> None:
         """Test running a single entrypoint."""
-        hao = HAO()
+        hao = HAOrchestrator()
         task = asyncio.create_task(hao.run_entrypoints([fastapi_entrypoint]))
 
         # Cancel after a brief moment
@@ -86,7 +86,7 @@ class TestHAORunEntrypoints:
         fastmcp_entrypoint: AbstractEntrypoint,
     ) -> None:
         """Test running multiple entrypoints concurrently."""
-        hao = HAO()
+        hao = HAOrchestrator()
 
         # Suppress FastMCP banner output and stdin
         fake_stdout = _create_mock_stdio()
@@ -107,7 +107,7 @@ class TestHAORunEntrypoints:
     @pytest.mark.asyncio
     async def test_run_entrypoints_uses_added_entrypoints(self, fastapi_entrypoint: AbstractEntrypoint) -> None:
         """Test that run_entrypoints uses entrypoints added via add_entrypoint."""
-        hao = HAO()
+        hao = HAOrchestrator()
         hao.add_entrypoint(fastapi_entrypoint)
 
         task = asyncio.create_task(hao.run_entrypoints())  # No arguments, uses added entrypoints
@@ -126,7 +126,7 @@ class TestHAORunEntrypoints:
         fastmcp_entrypoint: AbstractEntrypoint,
     ) -> None:
         """Test that run_entrypoints replaces previously added entrypoints."""
-        hao = HAO()
+        hao = HAOrchestrator()
         hao.add_entrypoint(fastapi_entrypoint)
 
         # Suppress FastMCP banner output and stdin
@@ -149,7 +149,7 @@ class TestHAORunEntrypoints:
         self, taskiq_entrypoint_with_worker: AbstractEntrypoint
     ) -> None:
         """Test that run_entrypoints validates entrypoints before startup."""
-        hao = HAO()
+        hao = HAOrchestrator()
         task = asyncio.create_task(hao.run_entrypoints([taskiq_entrypoint_with_worker]))
 
         # Cancel after a brief moment
@@ -162,7 +162,7 @@ class TestHAORunEntrypoints:
     @pytest.mark.asyncio
     async def test_run_entrypoints_calls_startup(self, fastapi_entrypoint: AbstractEntrypoint) -> None:
         """Test that run_entrypoints calls startup on entrypoints."""
-        hao = HAO()
+        hao = HAOrchestrator()
         task = asyncio.create_task(hao.run_entrypoints([fastapi_entrypoint]))
 
         # Give it a moment to start
@@ -176,7 +176,7 @@ class TestHAORunEntrypoints:
     @pytest.mark.asyncio
     async def test_run_entrypoints_calls_shutdown_on_error(self, fastapi_entrypoint: AbstractEntrypoint) -> None:
         """Test that run_entrypoints calls shutdown even on error."""
-        hao = HAO()
+        hao = HAOrchestrator()
 
         # Create a task that will be cancelled
         task = asyncio.create_task(hao.run_entrypoints([fastapi_entrypoint]))
@@ -218,7 +218,7 @@ class TestHAOErrorHandling:
                 raise EntrypointInconsistencyError("Invalid configuration")
 
         invalid_entrypoint = InvalidEntrypoint()
-        hao = HAO()
+        hao = HAOrchestrator()
 
         with pytest.raises(EntrypointInconsistencyError):
             await hao.run_entrypoints([invalid_entrypoint])  # type: ignore[arg-type]

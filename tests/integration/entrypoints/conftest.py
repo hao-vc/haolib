@@ -22,11 +22,11 @@ from taskiq_redis import ListRedisScheduleSource, RedisStreamBroker
 from haolib.configs.server import ServerConfig
 from haolib.entrypoints.abstract import AbstractEntrypoint
 from haolib.entrypoints.fastapi import FastAPIEntrypoint
-from haolib.entrypoints.fastmcp import FastMCPEntrypoint, FastMCPEntrypointComponent
+from haolib.entrypoints.fastmcp import FastMCPEntrypoint
 from haolib.entrypoints.faststream import (
     FastStreamEntrypoint,
-    FastStreamEntrypointComponent,
 )
+from haolib.entrypoints.plugins.fastapi import FastAPIDishkaPlugin
 from haolib.entrypoints.taskiq import TaskiqEntrypoint
 
 # Import container fixture from parent conftest
@@ -58,7 +58,7 @@ async def fastapi_entrypoint(fastapi_app: FastAPI) -> FastAPIEntrypoint:
 @pytest_asyncio.fixture
 async def fastapi_entrypoint_with_dishka(fastapi_app: FastAPI, container: AsyncContainer) -> FastAPIEntrypoint:
     """Create a FastAPI entrypoint with Dishka configured."""
-    return FastAPIEntrypoint(app=fastapi_app).setup_dishka(container)
+    return FastAPIEntrypoint(app=fastapi_app).use_plugin(FastAPIDishkaPlugin(container))
 
 
 @pytest_asyncio.fixture
@@ -71,12 +71,6 @@ async def fastmcp_app() -> FastMCP:
 async def fastmcp_entrypoint(fastmcp_app: FastMCP) -> FastMCPEntrypoint:
     """Create a FastMCP entrypoint for testing."""
     return FastMCPEntrypoint(fastmcp=fastmcp_app)
-
-
-@pytest_asyncio.fixture
-async def fastmcp_component(fastmcp_app: FastMCP) -> FastMCPEntrypointComponent:
-    """Create a FastMCP component for testing."""
-    return FastMCPEntrypointComponent(fastmcp=fastmcp_app)
 
 
 @pytest_asyncio.fixture
@@ -95,12 +89,6 @@ async def faststream_app(faststream_broker: KafkaBroker) -> FastStream:
 async def faststream_entrypoint(faststream_app: FastStream) -> FastStreamEntrypoint:
     """Create a FastStream entrypoint for testing."""
     return FastStreamEntrypoint(app=faststream_app)
-
-
-@pytest_asyncio.fixture
-async def faststream_component(faststream_broker: KafkaBroker) -> FastStreamEntrypointComponent:
-    """Create a FastStream component for testing."""
-    return FastStreamEntrypointComponent(broker=faststream_broker)
 
 
 @pytest_asyncio.fixture

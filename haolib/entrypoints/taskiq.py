@@ -2,19 +2,25 @@
 
 import asyncio
 import contextlib
-from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, Self
 
-from dishka.integrations.taskiq import setup_dishka as setup_dishka_taskiq
 from taskiq.api import run_receiver_task, run_scheduler_task
 
 from haolib.entrypoints.abstract import AbstractEntrypoint, EntrypointInconsistencyError
+from haolib.entrypoints.plugins.base import EntrypointPlugin, PluginPreset
+from haolib.entrypoints.plugins.helpers import (
+    apply_plugin,
+    apply_preset,
+    call_plugin_shutdown_hooks,
+    call_plugin_startup_hooks,
+    validate_plugins,
+)
+from haolib.entrypoints.plugins.registry import PluginRegistry
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
     from types import TracebackType
 
-    from dishka import AsyncContainer
     from taskiq import AsyncBroker, TaskiqScheduler
 
 
@@ -155,15 +161,41 @@ class TaskiqEntrypoint(AbstractEntrypoint):
         self._worker_kwargs: Mapping[str, Any] | None = None
         self._scheduler_args: Sequence[Any] | None = None
         self._scheduler_kwargs: Mapping[str, Any] | None = None
-        self._exception_handlers: dict[type[Exception], Callable[[Exception], None]] | None = None
         self._worker: TaskiqEntrypointWorker | None = None
+        self._plugins: list[EntrypointPlugin[Self]] = []
+        self._plugin_registry = PluginRegistry()
+
+    def use_plugin(self, plugin: EntrypointPlugin[Self]) -> Self:
+        """Add and apply a plugin to the entrypoint.
+
+        Plugins are applied immediately and stored for lifecycle hooks.
+
+        Args:
+            plugin: The plugin to add and apply.
+
+        Returns:
+            Self for method chaining.
+
+        """
+        return apply_plugin(self, plugin, self._plugins, self._plugin_registry)
+
+    def use_preset(self, preset: PluginPreset[Self]) -> Self:
+        """Add and apply a plugin preset to the entrypoint.
+
+        Args:
+            preset: The plugin preset to apply.
+
+        Returns:
+            Self for method chaining.
+
+        """
+        return apply_preset(self, preset, self._plugins, self._plugin_registry)
 
     def validate(self) -> None:
         """Validate Taskiq entrypoint configuration.
 
         Validates that the entrypoint is properly configured and all required
-        dependencies are available. Specifically checks:
-        - At least one of worker or scheduler is configured (configuration consistency)
+        dependencies are available. Also validates all plugins.
 
         Raises:
             EntrypointInconsistencyError: If configuration is invalid or
@@ -175,11 +207,13 @@ class TaskiqEntrypoint(AbstractEntrypoint):
         if not self._should_run_worker and self._scheduler is None:
             raise EntrypointInconsistencyError("Taskiq entrypoint must have either worker or scheduler configured.")
 
+        validate_plugins(self, self._plugins)
+
     async def startup(self) -> None:
         """Startup the Taskiq entrypoint.
 
-        Creates and initializes the TaskiqEntrypointWorker. This method is called
-        before run() and should be idempotent.
+        Creates and initializes the TaskiqEntrypointWorker. Calls startup hooks for all plugins.
+        This method is called before run() and should be idempotent.
 
         Raises:
             EntrypointInconsistencyError: If configuration is invalid.
@@ -199,42 +233,43 @@ class TaskiqEntrypoint(AbstractEntrypoint):
 
         await self._worker.startup()
 
+        await call_plugin_startup_hooks(self, self._plugins)
+
     async def shutdown(self) -> None:
         """Shutdown the Taskiq entrypoint.
 
-        Cleans up resources and stops the worker and scheduler. This method
-        is called after run() completes or is cancelled. Should be idempotent
+        Cleans up resources and stops the worker and scheduler. Calls shutdown hooks for all plugins.
+        This method is called after run() completes or is cancelled. Should be idempotent
         and safe to call multiple times.
 
         """
+        await call_plugin_shutdown_hooks(self, self._plugins)
+
         if self._worker is not None:
             await self._worker.shutdown()
             self._worker = None
 
-    def setup_dishka(self, container: AsyncContainer) -> Self:
-        """Setup Dishka dependency injection.
-
-        Configures Dishka to work with the Taskiq broker, enabling dependency
-        injection in task handlers.
-
-        Args:
-            container: The Dishka async container instance.
+    def get_broker(self) -> AsyncBroker:
+        """Get the Taskiq broker instance.
 
         Returns:
-            Self for method chaining.
-
-        Example:
-            ```python
-            from dishka import make_async_container
-
-            container = make_async_container(...)
-            entrypoint.setup_dishka(container)
-            ```
+            The Taskiq broker instance.
 
         """
-        setup_dishka_taskiq(container, self._broker)
+        return self._broker
 
-        return self
+    @property
+    def plugin_registry(self) -> PluginRegistry:
+        """Get the plugin registry for plugin discovery.
+
+        Provides read-only access to the plugin registry, allowing plugins
+        to discover other plugins without accessing private attributes.
+
+        Returns:
+            The plugin registry instance.
+
+        """
+        return self._plugin_registry
 
     def setup_worker(self, *args: Any, **kwargs: Any) -> Self:
         """Setup worker task.
@@ -294,33 +329,6 @@ class TaskiqEntrypoint(AbstractEntrypoint):
 
         return self
 
-    def setup_exception_handlers(self, exception_handlers: dict[type[Exception], Callable[[Exception], None]]) -> Self:
-        """Setup exception handlers.
-
-        Configures exception handlers for worker and scheduler tasks.
-        Handlers are called when exceptions occur during task execution.
-
-        Args:
-            exception_handlers: Dictionary mapping exception types to handler functions.
-
-        Returns:
-            Self for method chaining.
-
-        Example:
-            ```python
-            def handle_error(exc: Exception):
-                logger.error(f"Task error: {exc}")
-
-            entrypoint.setup_exception_handlers({
-                ValueError: handle_error
-            })
-            ```
-
-        """
-        self._exception_handlers = exception_handlers
-
-        return self
-
     async def run(self) -> None:
         """Run the Taskiq entrypoint.
 
@@ -346,20 +354,6 @@ class TaskiqEntrypoint(AbstractEntrypoint):
         if not tasks_to_wait:
             raise EntrypointInconsistencyError("No tasks to run in Taskiq entrypoint")
 
-        if self._exception_handlers is None:
-            # Run without exception handling - wait for tasks
-            with contextlib.suppress(asyncio.CancelledError):
-                await asyncio.gather(*tasks_to_wait)
-        else:
-            # Run with exception handling
-            try:
-                await asyncio.gather(*tasks_to_wait)
-            except Exception as exc:
-                exception_handler = next(
-                    (handler for exc_type, handler in self._exception_handlers.items() if isinstance(exc, exc_type)),
-                    None,
-                )
-                if exception_handler is None:
-                    raise
-
-                exception_handler(exc)
+        # Wait for tasks to complete
+        with contextlib.suppress(asyncio.CancelledError):
+            await asyncio.gather(*tasks_to_wait)

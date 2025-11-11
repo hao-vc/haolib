@@ -1,7 +1,6 @@
 """Base entrypoint."""
 
-from collections.abc import Callable
-from typing import Any, Protocol, Self
+from typing import Protocol
 
 
 class AbstractEntrypoint(Protocol):
@@ -29,10 +28,6 @@ class AbstractEntrypoint(Protocol):
             async def shutdown(self) -> None:
                 # Cleanup resources
                 pass
-
-            def setup_exception_handlers(self, ...) -> Self:
-                # Optional: setup exception handlers
-                return self
         ```
 
     """
@@ -72,25 +67,6 @@ class AbstractEntrypoint(Protocol):
         """
         ...
 
-    def setup_exception_handlers(
-        self, exception_handlers: dict[type[Exception], Callable[..., Any]], *args: Any, **kwargs: Any
-    ) -> Self:
-        """Setup exception handlers.
-
-        Optional method to configure exception handling for the entrypoint.
-        Not all entrypoints require exception handlers.
-
-        Args:
-            exception_handlers: Dictionary mapping exception types to handler functions.
-            *args: Additional positional arguments to pass to exception handlers.
-            **kwargs: Additional keyword arguments to pass to exception handlers.
-
-        Returns:
-            Self for method chaining.
-
-        """
-        ...
-
     def validate(self) -> None:
         """Validate entrypoint configuration.
 
@@ -100,39 +76,6 @@ class AbstractEntrypoint(Protocol):
         Raises:
             EntrypointInconsistencyError: If configuration is invalid or
                 required dependencies are missing.
-
-        """
-        ...
-
-
-class AbstractEntrypointComponent(Protocol):
-    """Abstract entrypoint component protocol.
-
-    Components are reusable pieces that can be integrated with entrypoints.
-    They provide a standardized interface for cross-entrypoint integration.
-
-    Example:
-        ```python
-        class MyComponent:
-            def validate(self) -> None:
-                # Validate component configuration
-                pass
-
-            def get_integration_hook(self, target_type: type) -> Callable | None:
-                # Return integration function for specific entrypoint type
-                pass
-        ```
-
-    """
-
-    def validate(self) -> None:
-        """Validate component configuration.
-
-        Validates that the component is properly configured and ready for use.
-        This method should be called before integration.
-
-        Raises:
-            EntrypointInconsistencyError: If component configuration is invalid.
 
         """
         ...

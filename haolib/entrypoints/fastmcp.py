@@ -1,16 +1,20 @@
 """FastMCP entrypoint."""
 
 import logging
-from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, Self
-
-from fastmcp.server.middleware import MiddlewareContext
-from fastmcp.server.middleware.error_handling import ErrorHandlingMiddleware
 
 from haolib.entrypoints.abstract import (
     AbstractEntrypoint,
-    AbstractEntrypointComponent,
 )
+from haolib.entrypoints.plugins.base import EntrypointPlugin, PluginPreset
+from haolib.entrypoints.plugins.helpers import (
+    apply_plugin,
+    apply_preset,
+    call_plugin_shutdown_hooks,
+    call_plugin_startup_hooks,
+    validate_plugins,
+)
+from haolib.entrypoints.plugins.registry import PluginRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -18,115 +22,23 @@ if TYPE_CHECKING:
     from fastmcp import FastMCP
 
 
-class FastMCPEntrypointComponent(AbstractEntrypointComponent):
-    """FastMCP entrypoint component for integration with other entrypoints.
-
-    This component provides a standardized interface for integrating FastMCP
-    applications with other entrypoint types (e.g., FastAPI). It encapsulates
-    FastMCP configuration and provides integration hooks.
-
-    Example:
-        ```python
-        from fastmcp import FastMCP
-
-        fastmcp = FastMCP()
-        component = FastMCPEntrypointComponent(fastmcp=fastmcp).setup_exception_handlers({
-            ValueError: lambda exc, ctx: logger.error(f"Value error: {exc}")
-        })
-
-        fastapi_entrypoint.setup_mcp(component, path="/mcp")
-        ```
-
-    Attributes:
-        _fastmcp: The FastMCP application instance.
-
-    """
-
-    def __init__(self, fastmcp: FastMCP) -> None:
-        """Initialize the FastMCP entrypoint component.
-
-        Args:
-            fastmcp: The FastMCP application instance to wrap.
-
-        """
-        self._fastmcp = fastmcp
-
-    def validate(self) -> None:
-        """Validate FastMCP component configuration.
-
-        Validates that the component is properly configured and ready for use.
-
-        """
-        # FastMCP app is guaranteed by type system (required in __init__)
-        # No validation needed
-
-    def get_app(self) -> FastMCP:
-        """Get the FastMCP application instance.
-
-        Returns:
-            The FastMCP application instance.
-
-        """
-        return self._fastmcp
-
-    def setup_exception_handlers(
-        self, exception_handlers: dict[type[Exception], Callable[[Exception, MiddlewareContext], None]]
-    ) -> Self:
-        """Setup exception handlers for the FastMCP app.
-
-        Configures exception handling middleware for the FastMCP application.
-        Handlers are called when exceptions occur during request processing.
-
-        Args:
-            exception_handlers: Dictionary mapping exception types to handler functions.
-                Handlers receive the exception and middleware context.
-
-        Returns:
-            Self for method chaining.
-
-        Example:
-            ```python
-            def handle_error(exc: Exception, ctx: MiddlewareContext):
-                logger.error(f"Error in {ctx}: {exc}")
-
-            component.setup_exception_handlers({
-                ValueError: handle_error
-            })
-            ```
-
-        """
-
-        def error_callback(exc: Exception, context: MiddlewareContext) -> None:
-            """Error callback."""
-            exception_handler = next(
-                (handler for exc_type, handler in exception_handlers.items() if isinstance(exc, exc_type)), None
-            )
-            if exception_handler is None:
-                raise exc
-
-            exception_handler(exc, context)
-
-        self._fastmcp.add_middleware(ErrorHandlingMiddleware(error_callback=error_callback))
-
-        return self
-
-
 class FastMCPEntrypoint(AbstractEntrypoint):
-    """FastMCP entrypoint implementation.
+    """FastMCP entrypoint implementation with plugin system.
 
     Provides a builder-pattern interface for configuring and running FastMCP
-    applications with features like exception handling.
+    applications using plugins for common features like exception handling.
 
     Example:
         ```python
         from fastmcp import FastMCP
+        from haolib.entrypoints.plugins.fastmcp import FastMCPExceptionHandlersPlugin
 
         fastmcp = FastMCP()
         entrypoint = (
             FastMCPEntrypoint(fastmcp=fastmcp)
-            .setup_exception_handlers({
+            .use_plugin(FastMCPExceptionHandlersPlugin({
                 ValueError: lambda exc, ctx: logger.error(f"Error: {exc}")
-            })
+            }))
         )
 
         await entrypoint.run()
@@ -136,6 +48,7 @@ class FastMCPEntrypoint(AbstractEntrypoint):
         _fastmcp: The FastMCP application instance.
         _run_args: Positional arguments to pass to fastmcp.run_async().
         _run_kwargs: Keyword arguments to pass to fastmcp.run_async().
+        _plugins: List of plugins applied to this entrypoint.
 
     """
 
@@ -152,22 +65,52 @@ class FastMCPEntrypoint(AbstractEntrypoint):
         self._fastmcp = fastmcp
         self._run_args = args
         self._run_kwargs = kwargs
+        self._plugins: list[EntrypointPlugin[Self]] = []
+        self._plugin_registry = PluginRegistry()
+
+    def use_plugin(self, plugin: EntrypointPlugin[Self]) -> Self:
+        """Add and apply a plugin to the entrypoint.
+
+        Plugins are applied immediately and stored for lifecycle hooks.
+
+        Args:
+            plugin: The plugin to add and apply.
+
+        Returns:
+            Self for method chaining.
+
+        """
+        return apply_plugin(self, plugin, self._plugins, self._plugin_registry)
+
+    def use_preset(self, preset: PluginPreset[Self]) -> Self:
+        """Add and apply a plugin preset to the entrypoint.
+
+        Args:
+            preset: The plugin preset to apply.
+
+        Returns:
+            Self for method chaining.
+
+        """
+        return apply_preset(self, preset, self._plugins, self._plugin_registry)
 
     def validate(self) -> None:
         """Validate FastMCP entrypoint configuration.
 
         Validates that the entrypoint is properly configured and all required
-        dependencies are available.
+        dependencies are available. Also validates all plugins.
 
         """
         # FastMCP app is guaranteed by type system (required in __init__)
         # No validation needed
 
+        validate_plugins(self, self._plugins)
+
     async def startup(self) -> None:
         """Startup the FastMCP entrypoint.
 
-        Prepares the FastMCP application for execution. This method is called
-        before run() and should be idempotent.
+        Prepares the FastMCP application for execution. Calls startup hooks for all plugins.
+        This method is called before run() and should be idempotent.
 
         Raises:
             EntrypointInconsistencyError: If configuration is invalid.
@@ -177,14 +120,18 @@ class FastMCPEntrypoint(AbstractEntrypoint):
 
         logger.info("FastMCP entrypoint starting")
 
+        await call_plugin_startup_hooks(self, self._plugins)
+
     async def shutdown(self) -> None:
         """Shutdown the FastMCP entrypoint.
 
-        Cleans up resources and stops the FastMCP application. This method
-        is called after run() completes or is cancelled. Should be idempotent
+        Cleans up resources and stops the FastMCP application. Calls shutdown hooks for all plugins.
+        This method is called after run() completes or is cancelled. Should be idempotent
         and safe to call multiple times.
 
         """
+        await call_plugin_shutdown_hooks(self, self._plugins)
+
         if self._fastmcp is not None:
             logger.info("Shutting down FastMCP entrypoint")
             # FastMCP handles cleanup automatically when run_async() is cancelled
@@ -199,46 +146,18 @@ class FastMCPEntrypoint(AbstractEntrypoint):
         """
         return self._fastmcp
 
-    def setup_exception_handlers(
-        self, exception_handlers: dict[type[Exception], Callable[[Exception, MiddlewareContext], None]]
-    ) -> Self:
-        """Setup exception handlers for the FastMCP app.
+    @property
+    def plugin_registry(self) -> PluginRegistry:
+        """Get the plugin registry for plugin discovery.
 
-        Configures exception handling middleware for request processing.
-        Handlers are called when exceptions occur during request handling.
-
-        Args:
-            exception_handlers: Dictionary mapping exception types to handler functions.
-                Handlers receive the exception and middleware context.
+        Provides read-only access to the plugin registry, allowing plugins
+        to discover other plugins without accessing private attributes.
 
         Returns:
-            Self for method chaining.
-
-        Example:
-            ```python
-            def handle_error(exc: Exception, ctx: MiddlewareContext):
-                logger.error(f"Error in {ctx}: {exc}")
-
-            entrypoint.setup_exception_handlers({
-                ValueError: handle_error
-            })
-            ```
+            The plugin registry instance.
 
         """
-
-        def error_callback(exc: Exception, context: MiddlewareContext) -> None:
-            """Error callback."""
-            exception_handler = next(
-                (handler for exc_type, handler in exception_handlers.items() if isinstance(exc, exc_type)), None
-            )
-            if exception_handler is None:
-                raise exc
-
-            exception_handler(exc, context)
-
-        self._fastmcp.add_middleware(ErrorHandlingMiddleware(error_callback=error_callback))
-
-        return self
+        return self._plugin_registry
 
     async def run(self) -> None:
         """Run the FastMCP entrypoint.

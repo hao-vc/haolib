@@ -4,11 +4,11 @@ import asyncio
 import contextlib
 import time
 
-from haolib.entrypoints import HAO
+from haolib.entrypoints import HAOrchestrator
 from haolib.entrypoints.abstract import AbstractEntrypoint
 
 
-def ensure_successful_run(hao: HAO, entrypoints: list[AbstractEntrypoint]) -> None:
+def ensure_successful_run(hao: HAOrchestrator, entrypoints: list[AbstractEntrypoint]) -> None:
     """Ensure successful run of the entrypoints."""
     loop = asyncio.new_event_loop()
 

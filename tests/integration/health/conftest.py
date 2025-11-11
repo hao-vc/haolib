@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 
 from haolib.configs.health import HealthCheckConfig
 from haolib.entrypoints.fastapi import FastAPIEntrypoint
+from haolib.entrypoints.plugins.fastapi import FastAPIHealthCheckPlugin
 from haolib.web.health.checkers.abstract import AbstractHealthChecker, HealthCheckMetadata, HealthCheckResult
 
 
@@ -72,8 +73,8 @@ async def health_checker_degraded() -> SimpleHealthChecker:
 async def app_with_health_check() -> FastAPI:
     """FastAPI app with health check endpoint."""
     app = FastAPI()
-    entrypoint = FastAPIEntrypoint(app=app)
-    return entrypoint.get_app()
+    FastAPIEntrypoint(app=app).use_plugin(FastAPIHealthCheckPlugin())
+    return app
 
 
 @pytest_asyncio.fixture
@@ -82,10 +83,10 @@ async def app_with_health_checkers(
 ) -> FastAPI:
     """FastAPI app with health check endpoint and checkers."""
     app = FastAPI()
-    entrypoint = FastAPIEntrypoint(app=app).setup_health_check(
-        health_checkers=cast("list[AbstractHealthChecker]", [health_checker_healthy])
+    FastAPIEntrypoint(app=app).use_plugin(
+        FastAPIHealthCheckPlugin(health_checkers=cast("list[AbstractHealthChecker]", [health_checker_healthy]))
     )
-    return entrypoint.get_app()
+    return app
 
 
 @pytest_asyncio.fixture
@@ -133,8 +134,8 @@ def create_entrypoint_with_checkers(
     entrypoint = FastAPIEntrypoint(app=app)
     if checkers:
         cast_checkers = cast("list[AbstractHealthChecker]", checkers)
-        return entrypoint.setup_health_check(health_checkers=cast_checkers, config=config)
-    return entrypoint.setup_health_check(config=config)
+        return entrypoint.use_plugin(FastAPIHealthCheckPlugin(health_checkers=cast_checkers, config=config))
+    return entrypoint.use_plugin(FastAPIHealthCheckPlugin(config=config))
 
 
 def create_test_client_with_checkers(
@@ -143,5 +144,5 @@ def create_test_client_with_checkers(
 ) -> TestClient:
     """Helper to create test client with checkers."""
     app = FastAPI()
-    entrypoint = create_entrypoint_with_checkers(app, checkers, config)
-    return TestClient(entrypoint.get_app())
+    create_entrypoint_with_checkers(app, checkers, config)
+    return TestClient(app)

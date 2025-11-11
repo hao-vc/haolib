@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 
 from haolib.configs.health import HealthCheckConfig
 from haolib.entrypoints.fastapi import FastAPIEntrypoint
+from haolib.entrypoints.plugins.fastapi import FastAPIHealthCheckPlugin
 from haolib.web.health.checkers.abstract import HealthCheckMetadata, HealthCheckResult, HealthStatus
 from haolib.web.health.handlers.fastapi import (
     FastAPIHealthCheckResponse,
@@ -41,7 +42,7 @@ class TestHealthCheckEndpoint:
 
     def test_health_check_no_checkers(self, empty_app: FastAPI) -> None:
         """Test health check endpoint with no checkers."""
-        entrypoint = FastAPIEntrypoint(app=empty_app).setup_health_check()
+        entrypoint = FastAPIEntrypoint(app=empty_app).use_plugin(FastAPIHealthCheckPlugin())
         client = TestClient(entrypoint.get_app())
 
         response = client.get(HEALTH_PATH_DEFAULT)
@@ -112,7 +113,7 @@ class TestHealthCheckEndpoint:
     def test_health_check_custom_path(self, empty_app: FastAPI) -> None:
         """Test health check with custom path."""
         config = HealthCheckConfig(route_path=HEALTH_PATH_CUSTOM)
-        entrypoint = FastAPIEntrypoint(app=empty_app).setup_health_check(config=config)
+        entrypoint = FastAPIEntrypoint(app=empty_app).use_plugin(FastAPIHealthCheckPlugin(config=config))
         client = TestClient(entrypoint.get_app())
 
         response = client.get(HEALTH_PATH_CUSTOM)
@@ -159,7 +160,7 @@ class TestHealthCheckEndpoint:
 
     def test_health_check_openapi_schema(self, empty_app: FastAPI) -> None:
         """Test that OpenAPI schema is generated correctly."""
-        entrypoint = FastAPIEntrypoint(app=empty_app).setup_health_check()
+        entrypoint = FastAPIEntrypoint(app=empty_app).use_plugin(FastAPIHealthCheckPlugin())
         client = TestClient(entrypoint.get_app())
 
         # Get OpenAPI schema
@@ -286,7 +287,7 @@ class TestHealthCheckEdgeCases:
 
     def test_health_check_empty_checkers_list(self, empty_app: FastAPI) -> None:
         """Test health check with empty checkers list."""
-        entrypoint = FastAPIEntrypoint(app=empty_app).setup_health_check(health_checkers=[])
+        entrypoint = FastAPIEntrypoint(app=empty_app).use_plugin(FastAPIHealthCheckPlugin(health_checkers=[]))
         client = TestClient(entrypoint.get_app())
 
         response = client.get(HEALTH_PATH_DEFAULT)

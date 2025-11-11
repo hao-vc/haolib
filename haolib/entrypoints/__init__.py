@@ -1,16 +1,14 @@
 """Entrypoints for the application."""
 
-import logging
 from asyncio import TaskGroup
 from collections.abc import Sequence
+from typing import Self
 
 from haolib.entrypoints.abstract import AbstractEntrypoint, EntrypointInconsistencyError
 
-logger = logging.getLogger(__name__)
 
-
-class HAO:
-    """HAO (Humanlessly Autonomously Orchestrated) application orchestrator.
+class HAOrchestrator:
+    """HAOrchestrator allows you to create a HAO (Humanlessly Autonomously Orchestrated) application.
 
     Orchestrates multiple entrypoints with proper lifecycle management, including
     startup, execution, and graceful shutdown. Handles errors and ensures proper
@@ -24,15 +22,17 @@ class HAO:
 
     Example:
         ```python
-        from haolib.entrypoints import HAO
+        from haolib.entrypoints import HAOrchestrator
         from haolib.entrypoints.fastapi import FastAPIEntrypoint
         from haolib.entrypoints.taskiq import TaskiqEntrypoint
 
-        fastapi_entrypoint = FastAPIEntrypoint(app=app).setup_dishka(container)
+        from haolib.entrypoints.plugins.fastapi import FastAPIDishkaPlugin
+
+        fastapi_entrypoint = FastAPIEntrypoint(app=app).use_plugin(FastAPIDishkaPlugin(container))
         taskiq_entrypoint = TaskiqEntrypoint(broker=broker).setup_worker()
 
-        hao = HAO()
-        await hao.run_entrypoints([fastapi_entrypoint, taskiq_entrypoint])
+        hao = HAOrchestrator().add_entrypoint(fastapi_entrypoint).add_entrypoint(taskiq_entrypoint)
+        await hao.run_entrypoints()
         ```
 
     Attributes:
@@ -41,10 +41,10 @@ class HAO:
     """
 
     def __init__(self) -> None:
-        """Initialize the HAO orchestrator."""
+        """Initialize the HAOrchestrator."""
         self._entrypoints: list[AbstractEntrypoint] = []
 
-    def add_entrypoint(self, entrypoint: AbstractEntrypoint) -> HAO:
+    def add_entrypoint(self, entrypoint: AbstractEntrypoint) -> Self:
         """Add an entrypoint to be orchestrated.
 
         Args:
@@ -58,7 +58,7 @@ class HAO:
 
         Example:
             ```python
-            hao = HAO()
+            hao = HAOrchestrator()
             hao.add_entrypoint(fastapi_entrypoint).add_entrypoint(taskiq_entrypoint)
             ```
 
@@ -104,13 +104,12 @@ class HAO:
         Example:
             ```python
             # Using add_entrypoint()
-            hao = HAO()
-            hao.add_entrypoint(fastapi_entrypoint)
-            hao.add_entrypoint(taskiq_entrypoint)
+            hao = HAOrchestrator()
+            hao.add_entrypoint(fastapi_entrypoint).add_entrypoint(taskiq_entrypoint)
             await hao.run_entrypoints()
 
             # Or passing directly
-            await hao.run_entrypoints([fastapi_entrypoint, taskiq_entrypoint])
+            await hao.run_entrypoints()
             ```
 
         """
@@ -119,7 +118,6 @@ class HAO:
             self._entrypoints = list(entrypoints)
 
         if not self._entrypoints:
-            logger.warning("No entrypoints to run")
             return
 
         # Validate all entrypoints
@@ -149,22 +147,17 @@ class HAO:
             raise ExceptionGroup("Errors during startup", startup_errors)
 
         # Execution phase - run all entrypoints concurrently
-        try:
-            async with TaskGroup() as task_group:
-                for entrypoint in self._entrypoints:
-                    task_group.create_task(entrypoint.run())
-        except* Exception:
-            logger.exception("Error during entrypoint execution")
-            raise
+        async with TaskGroup() as task_group:
+            for entrypoint in self._entrypoints:
+                task_group.create_task(entrypoint.run())
 
         # Shutdown phase - cleanup all entrypoints (reverse order)
-        finally:
-            shutdown_errors: list[Exception] = []
-            for entrypoint in reversed(self._entrypoints):
-                try:
-                    await entrypoint.shutdown()
-                except Exception as e:
-                    shutdown_errors.append(e)
+        shutdown_errors: list[Exception] = []
+        for entrypoint in reversed(self._entrypoints):
+            try:
+                await entrypoint.shutdown()
+            except Exception as e:
+                shutdown_errors.append(e)
 
-            if shutdown_errors:
-                logger.exception(f"Errors during shutdown: {shutdown_errors}")
+        if shutdown_errors:
+            raise ExceptionGroup("Errors during shutdown", shutdown_errors)

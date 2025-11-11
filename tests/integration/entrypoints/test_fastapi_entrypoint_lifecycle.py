@@ -7,6 +7,13 @@ from fastapi import FastAPI
 from haolib.configs.server import ServerConfig
 from haolib.entrypoints.abstract import EntrypointInconsistencyError
 from haolib.entrypoints.fastapi import FastAPIEntrypoint
+from haolib.entrypoints.plugins.fastapi import (
+    FastAPICORSMiddlewarePlugin,
+    FastAPIDishkaPlugin,
+    FastAPIExceptionHandlersPlugin,
+    FastAPIHealthCheckPlugin,
+    FastAPIIdempotencyMiddlewarePlugin,
+)
 from tests.integration.entrypoints.conftest import (
     run_entrypoint_briefly,
 )
@@ -97,36 +104,35 @@ class TestFastAPIEntrypointRun:
 class TestFastAPIEntrypointBuilder:
     """Test FastAPI entrypoint builder methods."""
 
-    def test_setup_dishka_returns_self(
+    def test_use_plugin_dishka_returns_self(
         self, fastapi_entrypoint: FastAPIEntrypoint, mock_container: AsyncContainer
     ) -> None:
-        """Test that setup_dishka returns self for chaining."""
-        result = fastapi_entrypoint.setup_dishka(mock_container)
+        """Test that use_plugin with DishkaPlugin returns self for chaining."""
+        result = fastapi_entrypoint.use_plugin(FastAPIDishkaPlugin(mock_container))
         assert result is fastapi_entrypoint
 
-    def test_setup_cors_middleware_returns_self(self, fastapi_entrypoint: FastAPIEntrypoint) -> None:
-        """Test that setup_cors_middleware returns self for chaining."""
-        result = fastapi_entrypoint.setup_cors_middleware()
+    def test_use_plugin_cors_returns_self(self, fastapi_entrypoint: FastAPIEntrypoint) -> None:
+        """Test that use_plugin with CORSMiddlewarePlugin returns self for chaining."""
+        result = fastapi_entrypoint.use_plugin(FastAPICORSMiddlewarePlugin())
         assert result is fastapi_entrypoint
 
-    def test_setup_exception_handlers_returns_self(self, fastapi_entrypoint: FastAPIEntrypoint) -> None:
-        """Test that setup_exception_handlers returns self for chaining."""
-        result = fastapi_entrypoint.setup_exception_handlers()
+    def test_use_plugin_exception_handlers_returns_self(self, fastapi_entrypoint: FastAPIEntrypoint) -> None:
+        """Test that use_plugin with ExceptionHandlersPlugin returns self for chaining."""
+        result = fastapi_entrypoint.use_plugin(FastAPIExceptionHandlersPlugin())
         assert result is fastapi_entrypoint
 
-    def test_setup_health_check_returns_self(self, fastapi_entrypoint: FastAPIEntrypoint) -> None:
-        """Test that setup_health_check returns self for chaining."""
-        result = fastapi_entrypoint.setup_health_check()
+    def test_use_plugin_health_check_returns_self(self, fastapi_entrypoint: FastAPIEntrypoint) -> None:
+        """Test that use_plugin with HealthCheckPlugin returns self for chaining."""
+        result = fastapi_entrypoint.use_plugin(FastAPIHealthCheckPlugin())
         assert result is fastapi_entrypoint
-
-    def test_get_app_returns_fastapi_app(self, fastapi_entrypoint: FastAPIEntrypoint) -> None:
-        """Test that get_app returns the FastAPI app."""
-        app = fastapi_entrypoint.get_app()
-        assert isinstance(app, FastAPI)
 
     def test_builder_pattern_chaining(self, fastapi_entrypoint: FastAPIEntrypoint) -> None:
-        """Test that builder methods can be chained."""
-        result = fastapi_entrypoint.setup_cors_middleware().setup_exception_handlers().setup_health_check()
+        """Test that use_plugin methods can be chained."""
+        result = (
+            fastapi_entrypoint.use_plugin(FastAPICORSMiddlewarePlugin())
+            .use_plugin(FastAPIExceptionHandlersPlugin())
+            .use_plugin(FastAPIHealthCheckPlugin())
+        )
         assert result is fastapi_entrypoint
 
 
@@ -141,9 +147,9 @@ class TestFastAPIEntrypointIdempotency:
             EntrypointInconsistencyError,
             match="Idempotency middleware cannot be setup without",
         ):
-            entrypoint.setup_idempotency_middleware()
+            entrypoint.use_plugin(FastAPIIdempotencyMiddlewarePlugin())
 
     def test_idempotency_with_container(self, fastapi_entrypoint_with_dishka: FastAPIEntrypoint) -> None:
         """Test idempotency middleware setup with container."""
-        result = fastapi_entrypoint_with_dishka.setup_idempotency_middleware()
+        result = fastapi_entrypoint_with_dishka.use_plugin(FastAPIIdempotencyMiddlewarePlugin())
         assert result is fastapi_entrypoint_with_dishka

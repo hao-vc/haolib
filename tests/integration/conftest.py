@@ -18,7 +18,13 @@ from haolib.configs.sqlalchemy import SQLAlchemyConfig
 from haolib.dependencies.dishka.redis import RedisProvider
 from haolib.dependencies.dishka.sqlalchemy import SQLAlchemyProvider
 from haolib.entrypoints.fastapi import FastAPIEntrypoint
-from haolib.entrypoints.fastmcp import FastMCPEntrypoint, FastMCPEntrypointComponent
+from haolib.entrypoints.fastmcp import FastMCPEntrypoint
+from haolib.entrypoints.plugins.fastapi import (
+    FastAPIDishkaPlugin,
+    FastAPIExceptionHandlersPlugin,
+    FastAPIFastMCPPlugin,
+    FastAPIIdempotencyMiddlewarePlugin,
+)
 from haolib.exceptions.base.fastapi import FastAPIBaseException
 from haolib.exceptions.handlers.fastapi import (
     fastapi_base_exception_handler,
@@ -86,35 +92,31 @@ async def clean_redis(container: AsyncContainer) -> None:
 @pytest_asyncio.fixture
 async def app(container: AsyncContainer) -> FastAPI:
     """Test app."""
-    return (
-        FastAPIEntrypoint(app=FastAPI())
-        .setup_dishka(container)
-        .setup_exception_handlers(
+    app_instance = FastAPI()
+    FastAPIEntrypoint(app=app_instance).use_plugin(FastAPIDishkaPlugin(container)).use_plugin(
+        FastAPIExceptionHandlersPlugin(
             exception_handlers={
                 Exception: fastapi_unknown_exception_handler,
                 FastAPIBaseException: fastapi_base_exception_handler,
             }
         )
-        .setup_idempotency_middleware()
-        .get_app()
-    )
+    ).use_plugin(FastAPIIdempotencyMiddlewarePlugin())
+    return app_instance
 
 
 @pytest_asyncio.fixture
 async def app_with_observability(container: AsyncContainer) -> FastAPI:
     """Test app."""
-    return (
-        FastAPIEntrypoint(app=FastAPI())
-        .setup_dishka(container)
-        .setup_exception_handlers(
+    app_instance = FastAPI()
+    FastAPIEntrypoint(app=app_instance).use_plugin(FastAPIDishkaPlugin(container)).use_plugin(
+        FastAPIExceptionHandlersPlugin(
             exception_handlers={
                 Exception: fastapi_unknown_exception_handler_with_observability,
                 FastAPIBaseException: fastapi_base_exception_handler,
             }
         )
-        .setup_idempotency_middleware()
-        .get_app()
-    )
+    ).use_plugin(FastAPIIdempotencyMiddlewarePlugin())
+    return app_instance
 
 
 @pytest_asyncio.fixture
@@ -124,14 +126,16 @@ async def app_with_mcp_and_mcp(container: AsyncContainer) -> tuple[FastAPI, Fast
     app = FastAPI()
     fastapi_entrypoint = (
         FastAPIEntrypoint(app=FastAPI())
-        .setup_dishka(container)
-        .setup_exception_handlers(
-            exception_handlers={
-                Exception: fastapi_unknown_exception_handler,
-                FastAPIBaseException: fastapi_base_exception_handler,
-            }
+        .use_plugin(FastAPIDishkaPlugin(container))
+        .use_plugin(
+            FastAPIExceptionHandlersPlugin(
+                exception_handlers={
+                    Exception: fastapi_unknown_exception_handler,
+                    FastAPIBaseException: fastapi_base_exception_handler,
+                }
+            )
         )
-        .setup_idempotency_middleware()
+        .use_plugin(FastAPIIdempotencyMiddlewarePlugin())
     )
 
     @app.post("/hello")
@@ -139,9 +143,9 @@ async def app_with_mcp_and_mcp(container: AsyncContainer) -> tuple[FastAPI, Fast
         return "hello"
 
     fastmcp_entrypoint = FastMCPEntrypoint(fastmcp=FastMCP.from_fastapi(app=app))
-    fastapi_entrypoint.setup_mcp(FastMCPEntrypointComponent(fastmcp=fastmcp_entrypoint.get_app()), "/mcp")
+    fastapi_entrypoint.use_plugin(FastAPIFastMCPPlugin(fastmcp_entrypoint.get_app(), "/mcp"))
 
-    return fastapi_entrypoint.get_app(), fastmcp_entrypoint.get_app()
+    return app, fastmcp_entrypoint.get_app()
 
 
 @pytest_asyncio.fixture

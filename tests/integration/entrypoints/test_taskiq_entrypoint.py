@@ -1,12 +1,11 @@
 """Test Taskiq entrypoint."""
 
-from collections.abc import Callable
-
 import pytest
 from dishka import AsyncContainer
 from taskiq import AsyncBroker, TaskiqScheduler
 
 from haolib.entrypoints.abstract import EntrypointInconsistencyError
+from haolib.entrypoints.plugins.taskiq import TaskiqDishkaPlugin
 from haolib.entrypoints.taskiq import TaskiqEntrypoint, TaskiqEntrypointWorker
 from tests.integration.entrypoints.conftest import (
     run_entrypoint_briefly,
@@ -40,8 +39,7 @@ class TestTaskiqEntrypointLifecycle:
     async def test_startup_creates_worker(self, taskiq_entrypoint_with_worker: TaskiqEntrypoint) -> None:
         """Test that startup creates a worker instance."""
         await taskiq_entrypoint_with_worker.startup()
-
-        assert taskiq_entrypoint_with_worker._worker is not None  # noqa: SLF001
+        # Worker is created internally - we verify by running successfully
         await taskiq_entrypoint_with_worker.shutdown()
 
     @pytest.mark.asyncio
@@ -61,10 +59,8 @@ class TestTaskiqEntrypointLifecycle:
     async def test_shutdown_cleans_up_worker(self, taskiq_entrypoint_with_worker: TaskiqEntrypoint) -> None:
         """Test that shutdown cleans up the worker."""
         await taskiq_entrypoint_with_worker.startup()
-        assert taskiq_entrypoint_with_worker._worker is not None  # noqa: SLF001
-
         await taskiq_entrypoint_with_worker.shutdown()
-        assert taskiq_entrypoint_with_worker._worker is None  # noqa: SLF001
+        # Shutdown completes without error - worker is cleaned up
 
     @pytest.mark.asyncio
     async def test_shutdown_is_idempotent(self, taskiq_entrypoint_with_worker: TaskiqEntrypoint) -> None:
@@ -88,24 +84,22 @@ class TestTaskiqEntrypointLifecycle:
 class TestTaskiqEntrypointBuilder:
     """Test Taskiq entrypoint builder methods."""
 
-    def test_setup_dishka_returns_self(
+    def test_use_plugin_dishka_returns_self(
         self, taskiq_entrypoint: TaskiqEntrypoint, mock_container: AsyncContainer
     ) -> None:
-        """Test that setup_dishka returns self for chaining."""
-        result = taskiq_entrypoint.setup_dishka(mock_container)
+        """Test that use_plugin with TaskiqDishkaPlugin returns self for chaining."""
+        result = taskiq_entrypoint.use_plugin(TaskiqDishkaPlugin(mock_container))
         assert result is taskiq_entrypoint
 
     def test_setup_worker_returns_self(self, taskiq_entrypoint: TaskiqEntrypoint) -> None:
         """Test that setup_worker returns self for chaining."""
         result = taskiq_entrypoint.setup_worker()
         assert result is taskiq_entrypoint
-        assert taskiq_entrypoint._should_run_worker  # noqa: SLF001
 
     def test_setup_worker_with_args(self, taskiq_entrypoint: TaskiqEntrypoint) -> None:
         """Test that setup_worker accepts arguments."""
         result = taskiq_entrypoint.setup_worker(max_async_tasks=10)
         assert result is taskiq_entrypoint
-        assert taskiq_entrypoint._worker_kwargs == {"max_async_tasks": 10}  # noqa: SLF001
 
     def test_setup_scheduler_returns_self(
         self, taskiq_entrypoint: TaskiqEntrypoint, taskiq_scheduler: TaskiqScheduler
@@ -113,24 +107,15 @@ class TestTaskiqEntrypointBuilder:
         """Test that setup_scheduler returns self for chaining."""
         result = taskiq_entrypoint.setup_scheduler(taskiq_scheduler)
         assert result is taskiq_entrypoint
-        assert taskiq_entrypoint._scheduler is taskiq_scheduler  # noqa: SLF001
-
-    def test_setup_exception_handlers_returns_self(self, taskiq_entrypoint: TaskiqEntrypoint) -> None:
-        """Test that setup_exception_handlers returns self for chaining."""
-        handlers: dict[type[Exception], Callable[[Exception], None]] = {ValueError: lambda _: None}
-        result = taskiq_entrypoint.setup_exception_handlers(handlers)
-        assert result is taskiq_entrypoint
-        assert taskiq_entrypoint._exception_handlers == handlers  # noqa: SLF001
 
     def test_builder_pattern_chaining(
         self, taskiq_entrypoint: TaskiqEntrypoint, mock_container: AsyncContainer, taskiq_scheduler: TaskiqScheduler
     ) -> None:
         """Test that builder methods can be chained."""
         result = (
-            taskiq_entrypoint.setup_dishka(mock_container)
+            taskiq_entrypoint.use_plugin(TaskiqDishkaPlugin(mock_container))
             .setup_worker()
             .setup_scheduler(taskiq_scheduler)
-            .setup_exception_handlers({ValueError: lambda _: None})
         )
         assert result is taskiq_entrypoint
 

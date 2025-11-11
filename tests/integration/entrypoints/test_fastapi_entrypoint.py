@@ -12,11 +12,19 @@ from taskiq import TaskiqScheduler
 from taskiq_redis import ListRedisScheduleSource, RedisStreamBroker
 
 from haolib.configs.cors import CORSConfig
-from haolib.entrypoints import HAO
+from haolib.entrypoints import HAOrchestrator
 from haolib.entrypoints.abstract import EntrypointInconsistencyError
 from haolib.entrypoints.fastapi import FastAPIEntrypoint
-from haolib.entrypoints.fastmcp import FastMCPEntrypointComponent
-from haolib.entrypoints.faststream import FastStreamEntrypointComponent
+from haolib.entrypoints.plugins.fastapi import (
+    FastAPICORSMiddlewarePlugin,
+    FastAPIDishkaPlugin,
+    FastAPIExceptionHandlersPlugin,
+    FastAPIFastMCPPlugin,
+    FastAPIFastStreamPlugin,
+    FastAPIIdempotencyMiddlewarePlugin,
+    FastAPIObservabilityPlugin,
+)
+from haolib.entrypoints.plugins.taskiq import TaskiqDishkaPlugin
 from haolib.entrypoints.taskiq import TaskiqEntrypoint
 from haolib.observability.setupper import ObservabilitySetupper
 from haolib.web.idempotency.storages.abstract import AbstractIdempotencyKeysStorage
@@ -32,7 +40,7 @@ def test_fastapi_entrypoint_full_default_setup(container: AsyncContainer) -> Non
     taskiq_broker = RedisStreamBroker(url="redis://localhost:6379")
     taskiq_entrypoint = (
         TaskiqEntrypoint(broker=taskiq_broker)
-        .setup_dishka(container)
+        .use_plugin(TaskiqDishkaPlugin(container))
         .setup_worker()
         .setup_scheduler(
             TaskiqScheduler(broker=taskiq_broker, sources=[ListRedisScheduleSource(url="redis://localhost:6379")])
@@ -41,49 +49,48 @@ def test_fastapi_entrypoint_full_default_setup(container: AsyncContainer) -> Non
 
     fastapi_entrypoint = (
         FastAPIEntrypoint(app=app)
-        .setup_dishka(container)
-        .setup_observability(ObservabilitySetupper().setup_logging().setup_tracing().setup_metrics())
-        .setup_faststream(FastStreamEntrypointComponent(broker=faststream_broker).setup_dishka(container))
-        .setup_cors_middleware()
-        .setup_mcp(
-            FastMCPEntrypointComponent(fastmcp=fastmcp).setup_exception_handlers(
-                {
-                    Exception: lambda *_: None,
-                }
-            ),
-            path="/mcp",
+        .use_plugin(FastAPIDishkaPlugin(container))
+        .use_plugin(FastAPIObservabilityPlugin(ObservabilitySetupper().setup_logging().setup_tracing().setup_metrics()))
+        .use_plugin(FastAPIFastStreamPlugin(faststream_broker))
+        .use_plugin(FastAPICORSMiddlewarePlugin())
+        .use_plugin(
+            FastAPIFastMCPPlugin(fastmcp, path="/mcp"),
         )
-        .setup_exception_handlers()
+        .use_plugin(FastAPIExceptionHandlersPlugin({Exception: lambda *_: None}))
     )
 
-    ensure_successful_run(HAO(), [fastapi_entrypoint, taskiq_entrypoint])
+    ensure_successful_run(HAOrchestrator(), [fastapi_entrypoint, taskiq_entrypoint])
 
 
 def test_fastapi_entrypoint_cors_middleware_setup_with_default_config() -> None:
     """Test entrypoints."""
     app = FastAPI()
-    fastapi_entrypoint = FastAPIEntrypoint(app=app).setup_cors_middleware()
+    fastapi_entrypoint = FastAPIEntrypoint(app=app).use_plugin(FastAPICORSMiddlewarePlugin())
 
-    ensure_successful_run(HAO(), [fastapi_entrypoint])
+    ensure_successful_run(HAOrchestrator(), [fastapi_entrypoint])
 
 
 def test_fastapi_entrypoint_cors_middleware_setup_with_custom_config() -> None:
     """Test entrypoints."""
     app = FastAPI()
-    fastapi_entrypoint = FastAPIEntrypoint(app=app).setup_cors_middleware(
-        cors_config=CORSConfig(allow_origins=["https://example.com"])
+    fastapi_entrypoint = FastAPIEntrypoint(app=app).use_plugin(
+        FastAPICORSMiddlewarePlugin(cors_config=CORSConfig(allow_origins=["https://example.com"]))
     )
 
-    ensure_successful_run(HAO(), [fastapi_entrypoint])
+    ensure_successful_run(HAOrchestrator(), [fastapi_entrypoint])
 
 
 def test_fastapi_entrypoint_idempotency_middleware_setup_with_container(container: AsyncContainer) -> None:
     """Test entrypoints."""
     app = FastAPI()
 
-    fastapi_entrypoint = FastAPIEntrypoint(app=app).setup_dishka(container).setup_idempotency_middleware()
+    fastapi_entrypoint = (
+        FastAPIEntrypoint(app=app)
+        .use_plugin(FastAPIDishkaPlugin(container))
+        .use_plugin(FastAPIIdempotencyMiddlewarePlugin())
+    )
 
-    ensure_successful_run(HAO(), [fastapi_entrypoint])
+    ensure_successful_run(HAOrchestrator(), [fastapi_entrypoint])
 
 
 def test_fastapi_entrypoint_idempotency_middleware_setup_with_storage_factory(container: AsyncContainer) -> None:
@@ -97,11 +104,13 @@ def test_fastapi_entrypoint_idempotency_middleware_setup_with_storage_factory(co
 
     fastapi_entrypoint = (
         FastAPIEntrypoint(app=app)
-        .setup_dishka(container)
-        .setup_idempotency_middleware(idempotency_keys_storage_factory=idempotency_keys_storage_factory)
+        .use_plugin(FastAPIDishkaPlugin(container))
+        .use_plugin(
+            FastAPIIdempotencyMiddlewarePlugin(idempotency_keys_storage_factory=idempotency_keys_storage_factory)
+        )
     )
 
-    ensure_successful_run(HAO(), [fastapi_entrypoint])
+    ensure_successful_run(HAOrchestrator(), [fastapi_entrypoint])
 
 
 def test_fastapi_entrypoint_idempotency_middleware_setup_without_container_and_storage_factory() -> None:
@@ -109,4 +118,4 @@ def test_fastapi_entrypoint_idempotency_middleware_setup_without_container_and_s
     app = FastAPI()
 
     with pytest.raises(EntrypointInconsistencyError):
-        FastAPIEntrypoint(app=app).setup_idempotency_middleware()
+        FastAPIEntrypoint(app=app).use_plugin(FastAPIIdempotencyMiddlewarePlugin())
