@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 import pytest
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
 from haolib.configs.health import HealthCheckConfig
 from haolib.entrypoints.fastapi import FastAPIEntrypoint
-from haolib.web.health.core.checker import HealthCheckMetadata, HealthCheckResult
-from haolib.web.health.core.status import HealthStatus
+from haolib.web.health.checkers.abstract import HealthCheckMetadata, HealthCheckResult, HealthStatus
 from haolib.web.health.handlers.fastapi import (
     FastAPIHealthCheckResponse,
     fastapi_default_health_check_response_factory,
@@ -226,7 +227,7 @@ class TestHealthCheckHandlerFactory:
         health_checker_healthy_simple: SimpleHealthChecker,
     ) -> None:
         """Test handler factory with custom config."""
-        config = HealthCheckConfig(timeout_seconds=1.0, execute_parallel=True)
+        config = HealthCheckConfig(timeout=timedelta(seconds=1), execute_parallel=True)
         handler = fastapi_health_check_handler_factory(
             checkers=[health_checker_healthy_simple],
             config=config,

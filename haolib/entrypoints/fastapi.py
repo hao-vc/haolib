@@ -16,7 +16,7 @@ from haolib.entrypoints.abstract import AbstractEntrypoint, EntrypointInconsiste
 from haolib.exceptions.base.fastapi import FastAPIBaseException
 from haolib.exceptions.handlers.fastapi import fastapi_base_exception_handler, fastapi_unknown_exception_handler
 from haolib.observability.setupper import ObservabilitySetupper
-from haolib.web.health.core.checker import AbstractHealthChecker
+from haolib.web.health.checkers.abstract import AbstractHealthChecker
 from haolib.web.health.handlers.fastapi import (
     FastAPIHealthCheckResponse,
     HealthCheckConfig,

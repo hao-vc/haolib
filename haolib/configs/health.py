@@ -1,5 +1,7 @@
 """Health check configuration."""
 
+from datetime import timedelta
+
 from pydantic import Field
 from pydantic_settings import BaseSettings
 
@@ -20,7 +22,7 @@ class HealthCheckConfig(BaseSettings):
     """
 
     route_path: str = Field(default="/health", description="Endpoint path.")
-    timeout_seconds: float | None = Field(default=None, description="Timeout for all health checks.")
+    timeout: timedelta | None = Field(default=None, description="Timeout for all health checks.")
     execute_parallel: bool = Field(default=True, description="Whether to execute checks in parallel.")
     status_code_healthy: int = Field(default=200, description="HTTP status code when healthy.")
     status_code_unhealthy: int = Field(

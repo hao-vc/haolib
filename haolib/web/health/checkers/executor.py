@@ -3,10 +3,15 @@
 import asyncio
 import time
 from collections.abc import Sequence
+from datetime import timedelta
 from typing import Any
 
-from haolib.web.health.core.checker import AbstractHealthChecker, HealthCheckMetadata, HealthCheckResult
-from haolib.web.health.core.status import HealthStatus
+from haolib.web.health.checkers.abstract import (
+    AbstractHealthChecker,
+    HealthCheckMetadata,
+    HealthCheckResult,
+    HealthStatus,
+)
 
 # Constants
 TIMEOUT_ERROR_MESSAGE = "Health check timed out"
@@ -17,7 +22,7 @@ class HealthCheckExecutor:
 
     Example:
         ```python
-        executor = HealthCheckExecutor(timeout_seconds=5.0)
+        executor = HealthCheckExecutor(timeout=timedelta(seconds=5))
         results = await executor.execute([db_checker, redis_checker])
         overall_status = executor.aggregate_status(results)
         ```
@@ -26,19 +31,19 @@ class HealthCheckExecutor:
 
     def __init__(
         self,
-        timeout_seconds: float | None = None,
+        timeout: timedelta | None = None,
         execute_parallel: bool = True,
     ) -> None:
         """Initialize the health check executor.
 
         Args:
-            timeout_seconds: Maximum time to wait for all checks to complete.
+            timeout: Maximum time to wait for all checks to complete.
                 If None, no timeout is applied.
             execute_parallel: Whether to execute checks in parallel.
                 If False, checks are executed sequentially.
 
         """
-        self.timeout_seconds = timeout_seconds
+        self.timeout = timeout
         self.execute_parallel = execute_parallel
 
     async def execute(
@@ -73,11 +78,11 @@ class HealthCheckExecutor:
         """Execute checks in parallel."""
         tasks = [asyncio.create_task(self._execute_with_timing(checker)) for checker in checkers]
 
-        if self.timeout_seconds is not None:
+        if self.timeout is not None:
             try:
                 results = await asyncio.wait_for(
                     asyncio.gather(*tasks, return_exceptions=True),
-                    timeout=self.timeout_seconds,
+                    timeout=self.timeout.total_seconds(),
                 )
             except TimeoutError:
                 # Cancel remaining tasks and create timeout results
@@ -132,14 +137,15 @@ class HealthCheckExecutor:
         results: list[HealthCheckResult] = []
         for i, checker in enumerate(checkers):
             try:
-                if self.timeout_seconds is not None:
+                if self.timeout is not None:
                     result = await asyncio.wait_for(
                         self._execute_with_timing(checker),
-                        timeout=self.timeout_seconds,
+                        timeout=self.timeout.total_seconds(),
                     )
+                    results.append(result)
                 else:
                     result = await self._execute_with_timing(checker)
-                results.append(result)
+                    results.append(result)
             except TimeoutError:
                 results.append(
                     HealthCheckResult(
@@ -192,8 +198,10 @@ class HealthCheckExecutor:
         """
         if hasattr(checker, "metadata") and isinstance(checker.metadata, HealthCheckMetadata):
             return checker.metadata
+
         if hasattr(checker, "name") and isinstance(checker.name, str):
             return HealthCheckMetadata(name=checker.name, critical=True)
+
         return HealthCheckMetadata(name=f"checker_{index}", critical=True)
 
     @staticmethod

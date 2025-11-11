@@ -7,9 +7,8 @@ from fastapi import Request, Response
 from pydantic import BaseModel, Field
 
 from haolib.configs.health import HealthCheckConfig
-from haolib.web.health.core.checker import AbstractHealthChecker, HealthCheckResult
-from haolib.web.health.core.executor import HealthCheckExecutor
-from haolib.web.health.core.status import HealthStatus
+from haolib.web.health.checkers.abstract import AbstractHealthChecker, HealthCheckResult, HealthStatus
+from haolib.web.health.checkers.executor import HealthCheckExecutor
 
 
 class FastAPIHealthCheckResponseItem(BaseModel):
@@ -133,7 +132,7 @@ def fastapi_health_check_handler_factory(
             return await fastapi_health_check_handler_factory(
                 checkers=[db_checker, redis_checker],
                 config=HealthCheckConfig(
-                    timeout_seconds=5.0,
+                    timeout=timedelta(seconds=5),
                     execute_parallel=True,
                 )
             )(request)
@@ -144,7 +143,7 @@ def fastapi_health_check_handler_factory(
         config = HealthCheckConfig()
 
     executor = HealthCheckExecutor(
-        timeout_seconds=config.timeout_seconds,
+        timeout=config.timeout,
         execute_parallel=config.execute_parallel,
     )
     response_factory = response_factory or fastapi_default_health_check_response_factory

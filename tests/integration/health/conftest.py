@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 
 from haolib.configs.health import HealthCheckConfig
 from haolib.entrypoints.fastapi import FastAPIEntrypoint
-from haolib.web.health.core.checker import AbstractHealthChecker, HealthCheckMetadata, HealthCheckResult
+from haolib.web.health.checkers.abstract import AbstractHealthChecker, HealthCheckMetadata, HealthCheckResult
 
 
 class SimpleHealthChecker:

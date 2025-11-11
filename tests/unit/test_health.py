@@ -4,16 +4,17 @@ from __future__ import annotations
 
 import asyncio
 import time
+from datetime import timedelta
 from typing import Any
 
 import pytest
 
-from haolib.web.health.core.checker import (
+from haolib.web.health.checkers.abstract import (
     HealthCheckMetadata,
     HealthCheckResult,
+    HealthStatus,
 )
-from haolib.web.health.core.executor import HealthCheckExecutor
-from haolib.web.health.core.status import HealthStatus
+from haolib.web.health.checkers.executor import HealthCheckExecutor
 
 # Constants
 DELAY_SHORT = 0.05
@@ -224,7 +225,7 @@ class TestHealthCheckExecutor:
     @pytest.mark.asyncio
     async def test_execute_with_timeout_parallel(self) -> None:
         """Test timeout in parallel execution."""
-        executor = HealthCheckExecutor(timeout_seconds=TIMEOUT_SHORT, execute_parallel=True)
+        executor = HealthCheckExecutor(timeout=timedelta(seconds=TIMEOUT_SHORT), execute_parallel=True)
         checkers = [
             MockHealthChecker(name="checker1", is_healthy=True, delay=DELAY_SHORT),
             MockHealthChecker(name="checker2", is_healthy=True, delay=DELAY_LONG),  # Will timeout
@@ -240,7 +241,7 @@ class TestHealthCheckExecutor:
     @pytest.mark.asyncio
     async def test_execute_with_timeout_sequential(self) -> None:
         """Test timeout in sequential execution."""
-        executor = HealthCheckExecutor(timeout_seconds=TIMEOUT_SHORT, execute_parallel=False)
+        executor = HealthCheckExecutor(timeout=timedelta(seconds=TIMEOUT_SHORT), execute_parallel=False)
         checkers = [
             MockHealthChecker(name="checker1", is_healthy=True, delay=DELAY_SHORT),
             MockHealthChecker(name="checker2", is_healthy=True, delay=DELAY_LONG),  # Will timeout
