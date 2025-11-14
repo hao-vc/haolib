@@ -77,18 +77,6 @@ class TestFastStreamComponentIntegration:
         assert result is fastapi_entrypoint
 
 
-class TestComponentValidation:
-    """Test component validation."""
-
-    def test_fastmcp_component_validate(self, fastmcp_entrypoint: FastMCPEntrypoint) -> None:
-        """Test FastMCP component validation."""
-        fastmcp_entrypoint.validate()  # Should not raise
-
-    def test_faststream_component_validate(self, faststream_entrypoint: FastStreamEntrypoint) -> None:
-        """Test FastStream component validation."""
-        faststream_entrypoint.validate()  # Should not raise
-
-
 class TestComponentBuilderPattern:
     """Test component builder pattern."""
 

@@ -6,9 +6,10 @@ from fastmcp.server.middleware import MiddlewareContext
 from fastmcp.server.middleware.error_handling import ErrorHandlingMiddleware
 
 from haolib.entrypoints.fastmcp import FastMCPEntrypoint
+from haolib.entrypoints.plugins.abstract import AbstractEntrypointPlugin
 
 
-class FastMCPExceptionHandlersPlugin:
+class FastMCPExceptionHandlersPlugin(AbstractEntrypointPlugin[FastMCPEntrypoint]):
     """Plugin for adding exception handlers to FastMCP entrypoints.
 
     Example:
@@ -34,11 +35,11 @@ class FastMCPExceptionHandlersPlugin:
         """
         self._exception_handlers = exception_handlers
 
-    def apply(self, entrypoint: FastMCPEntrypoint) -> FastMCPEntrypoint:
+    def apply(self, component: FastMCPEntrypoint) -> FastMCPEntrypoint:
         """Apply exception handlers to the entrypoint.
 
         Args:
-            entrypoint: The FastMCP entrypoint to configure.
+            component: The FastMCP entrypoint to configure.
 
         Returns:
             The configured entrypoint.
@@ -55,32 +56,5 @@ class FastMCPExceptionHandlersPlugin:
 
             exception_handler(exc, context)
 
-        entrypoint.get_app().add_middleware(ErrorHandlingMiddleware(error_callback=error_callback))
-        return entrypoint
-
-    def validate(self, entrypoint: FastMCPEntrypoint) -> None:
-        """Validate plugin configuration.
-
-        Args:
-            entrypoint: The entrypoint to validate against.
-
-        """
-        # No validation needed
-
-    async def on_startup(self, entrypoint: FastMCPEntrypoint) -> None:
-        """Startup hook.
-
-        Args:
-            entrypoint: The entrypoint that is starting up.
-
-        """
-        # No startup logic needed
-
-    async def on_shutdown(self, entrypoint: FastMCPEntrypoint) -> None:
-        """Shutdown hook.
-
-        Args:
-            entrypoint: The entrypoint that is shutting down.
-
-        """
-        # No shutdown logic needed
+        component.get_app().add_middleware(ErrorHandlingMiddleware(error_callback=error_callback))
+        return component

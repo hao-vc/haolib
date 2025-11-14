@@ -199,7 +199,7 @@ class TestHAOErrorHandling:
         """Test that run_entrypoints handles startup errors gracefully."""
 
         # Create an entrypoint that will fail validation
-        class InvalidEntrypoint:
+        class InvalidEntrypoint:  # type: ignore[misc]
             """Invalid entrypoint for testing."""
 
             async def startup(self) -> None:
@@ -217,8 +217,13 @@ class TestHAOErrorHandling:
             def validate(self) -> None:
                 raise EntrypointInconsistencyError("Invalid configuration")
 
-        invalid_entrypoint = InvalidEntrypoint()
+        invalid_entrypoint: AbstractEntrypoint = InvalidEntrypoint()  # type: ignore[assignment]
         hao = HAOrchestrator()
 
-        with pytest.raises(EntrypointInconsistencyError):
-            await hao.run_entrypoints([invalid_entrypoint])  # type: ignore[arg-type]
+        with pytest.raises(ExceptionGroup) as exc_info:
+            await hao.run_entrypoints([invalid_entrypoint])
+
+        # Verify that the ExceptionGroup contains EntrypointInconsistencyError
+        assert len(exc_info.value.exceptions) == 1
+        assert isinstance(exc_info.value.exceptions[0], EntrypointInconsistencyError)
+        assert str(exc_info.value.exceptions[0]) == "Invalid configuration"

@@ -20,22 +20,6 @@ from tests.integration.entrypoints.conftest import (
 )
 
 
-class TestFastStreamEntrypointValidation:
-    """Test FastStream entrypoint validation."""
-
-    def test_validate_succeeds_with_valid_app(self, faststream_entrypoint: FastStreamEntrypoint) -> None:
-        """Test that validation succeeds with a valid FastStream app."""
-        faststream_entrypoint.validate()
-
-    def test_validate_fails_without_broker(self) -> None:
-        """Test that validation fails when broker is not configured."""
-        app = FastStream()  # App without broker
-        entrypoint = FastStreamEntrypoint(app=app)
-
-        with pytest.raises(EntrypointInconsistencyError, match="FastStream broker is not configured"):
-            entrypoint.validate()
-
-
 class TestFastStreamEntrypointLifecycle:
     """Test FastStream entrypoint lifecycle methods."""
 

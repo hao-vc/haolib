@@ -1,6 +1,6 @@
 """FastAPI entrypoint plugins."""
 
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Sequence
 from typing import TYPE_CHECKING, Any, cast
 
 from dishka import AsyncContainer, Scope
@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 from haolib.configs.cors import CORSConfig
 from haolib.entrypoints.abstract import EntrypointInconsistencyError
 from haolib.entrypoints.fastapi import FastAPIEntrypoint
+from haolib.entrypoints.plugins.abstract import AbstractEntrypointPlugin
 from haolib.exceptions.base.fastapi import FastAPIBaseException
 from haolib.exceptions.handlers.fastapi import fastapi_base_exception_handler, fastapi_unknown_exception_handler
 from haolib.observability.setupper import ObservabilitySetupper
@@ -30,11 +31,10 @@ from haolib.web.idempotency.storages.abstract import AbstractIdempotencyKeysStor
 
 if TYPE_CHECKING:
     from fastmcp import FastMCP
+    from faststream._internal.broker import BrokerUsecase as BrokerType
 
-    from haolib.entrypoints.faststream import BrokerType
 
-
-class FastAPIDishkaPlugin:
+class FastAPIDishkaPlugin(AbstractEntrypointPlugin[FastAPIEntrypoint]):
     """Plugin for adding Dishka dependency injection to FastAPI entrypoints.
 
     Example:
@@ -46,6 +46,25 @@ class FastAPIDishkaPlugin:
         ```
 
     """
+
+    @property
+    def priority(self) -> int:
+        """Plugin priority for ordering.
+
+        Lower values execute first. Default is 0.
+        Plugins with same priority execute in application order.
+        """
+        return 0
+
+    @property
+    def dependencies(self) -> Sequence[type[AbstractEntrypointPlugin[FastAPIEntrypoint]]]:
+        """Required plugin types that must be applied before this plugin.
+
+        Returns:
+            Sequence of plugin types that this plugin depends on.
+
+        """
+        return ()
 
     def __init__(self, container: AsyncContainer) -> None:
         """Initialize the Dishka plugin.
@@ -65,49 +84,22 @@ class FastAPIDishkaPlugin:
         """
         return self._container
 
-    def apply(self, entrypoint: FastAPIEntrypoint) -> FastAPIEntrypoint:
+    def apply(self, component: FastAPIEntrypoint) -> FastAPIEntrypoint:
         """Apply Dishka to the entrypoint.
 
         Args:
-            entrypoint: The FastAPI entrypoint to configure.
+            component: The FastAPI entrypoint to configure.
 
         Returns:
             The configured entrypoint.
 
         """
-        setup_dishka_fastapi(self._container, entrypoint.get_app())
-        entrypoint._container = self._container  # noqa: SLF001
-        return entrypoint
-
-    def validate(self, entrypoint: FastAPIEntrypoint) -> None:
-        """Validate plugin configuration.
-
-        Args:
-            entrypoint: The entrypoint to validate against.
-
-        """
-        # No validation needed - container is required in __init__
-
-    async def on_startup(self, entrypoint: FastAPIEntrypoint) -> None:
-        """Startup hook.
-
-        Args:
-            entrypoint: The entrypoint that is starting up.
-
-        """
-        # No startup logic needed
-
-    async def on_shutdown(self, entrypoint: FastAPIEntrypoint) -> None:
-        """Shutdown hook.
-
-        Args:
-            entrypoint: The entrypoint that is shutting down.
-
-        """
-        # No shutdown logic needed
+        setup_dishka_fastapi(self._container, component.get_app())
+        component._container = self._container  # noqa: SLF001
+        return component
 
 
-class FastAPIObservabilityPlugin:
+class FastAPIObservabilityPlugin(AbstractEntrypointPlugin[FastAPIEntrypoint]):
     """Plugin for adding observability to FastAPI entrypoints.
 
     Example:
@@ -129,48 +121,21 @@ class FastAPIObservabilityPlugin:
         """
         self._observability = observability
 
-    def apply(self, entrypoint: FastAPIEntrypoint) -> FastAPIEntrypoint:
+    def apply(self, component: FastAPIEntrypoint) -> FastAPIEntrypoint:
         """Apply observability to the entrypoint.
 
         Args:
-            entrypoint: The FastAPI entrypoint to configure.
+            component: The FastAPI entrypoint to configure.
 
         Returns:
-            The configured entrypoint.
+            The configured component.
 
         """
-        self._observability.instrument_fastapi(entrypoint.get_app())
-        return entrypoint
-
-    def validate(self, entrypoint: FastAPIEntrypoint) -> None:
-        """Validate plugin configuration.
-
-        Args:
-            entrypoint: The entrypoint to validate against.
-
-        """
-        # No validation needed
-
-    async def on_startup(self, entrypoint: FastAPIEntrypoint) -> None:
-        """Startup hook.
-
-        Args:
-            entrypoint: The entrypoint that is starting up.
-
-        """
-        # No startup logic needed
-
-    async def on_shutdown(self, entrypoint: FastAPIEntrypoint) -> None:
-        """Shutdown hook.
-
-        Args:
-            entrypoint: The entrypoint that is shutting down.
-
-        """
-        # No shutdown logic needed
+        self._observability.instrument_fastapi(component.get_app())
+        return component
 
 
-class FastAPICORSMiddlewarePlugin:
+class FastAPICORSMiddlewarePlugin(AbstractEntrypointPlugin[FastAPIEntrypoint]):
     """Plugin for adding CORS middleware to FastAPI entrypoints.
 
     Example:
@@ -193,17 +158,17 @@ class FastAPICORSMiddlewarePlugin:
         self._cors_config = cors_config or CORSConfig()
         self._CORSMiddleware = CORSMiddleware
 
-    def apply(self, entrypoint: FastAPIEntrypoint) -> FastAPIEntrypoint:
+    def apply(self, component: FastAPIEntrypoint) -> FastAPIEntrypoint:
         """Apply CORS middleware to the entrypoint.
 
         Args:
-            entrypoint: The FastAPI entrypoint to configure.
+            component: The FastAPI entrypoint to configure.
 
         Returns:
             The configured entrypoint.
 
         """
-        entrypoint.get_app().add_middleware(
+        component.get_app().add_middleware(
             self._CORSMiddleware,
             allow_origins=self._cors_config.allow_origins,
             allow_methods=self._cors_config.allow_methods,
@@ -213,37 +178,10 @@ class FastAPICORSMiddlewarePlugin:
             expose_headers=self._cors_config.expose_headers,
             max_age=self._cors_config.max_age,
         )
-        return entrypoint
-
-    def validate(self, entrypoint: FastAPIEntrypoint) -> None:
-        """Validate plugin configuration.
-
-        Args:
-            entrypoint: The entrypoint to validate against.
-
-        """
-        # No validation needed
-
-    async def on_startup(self, entrypoint: FastAPIEntrypoint) -> None:
-        """Startup hook.
-
-        Args:
-            entrypoint: The entrypoint that is starting up.
-
-        """
-        # No startup logic needed
-
-    async def on_shutdown(self, entrypoint: FastAPIEntrypoint) -> None:
-        """Shutdown hook.
-
-        Args:
-            entrypoint: The entrypoint that is shutting down.
-
-        """
-        # No shutdown logic needed
+        return component
 
 
-class FastAPIExceptionHandlersPlugin:
+class FastAPIExceptionHandlersPlugin(AbstractEntrypointPlugin[FastAPIEntrypoint]):
     """Plugin for adding exception handlers to FastAPI entrypoints.
 
     Example:
@@ -271,49 +209,22 @@ class FastAPIExceptionHandlersPlugin:
             }
         self._exception_handlers = exception_handlers
 
-    def apply(self, entrypoint: FastAPIEntrypoint) -> FastAPIEntrypoint:
+    def apply(self, component: FastAPIEntrypoint) -> FastAPIEntrypoint:
         """Apply exception handlers to the entrypoint.
 
         Args:
-            entrypoint: The FastAPI entrypoint to configure.
+            component: The FastAPI entrypoint to configure.
 
         Returns:
             The configured entrypoint.
 
         """
         for exception, handler in self._exception_handlers.items():
-            entrypoint.get_app().add_exception_handler(exception, handler)
-        return entrypoint
-
-    def validate(self, entrypoint: FastAPIEntrypoint) -> None:
-        """Validate plugin configuration.
-
-        Args:
-            entrypoint: The entrypoint to validate against.
-
-        """
-        # No validation needed
-
-    async def on_startup(self, entrypoint: FastAPIEntrypoint) -> None:
-        """Startup hook.
-
-        Args:
-            entrypoint: The entrypoint that is starting up.
-
-        """
-        # No startup logic needed
-
-    async def on_shutdown(self, entrypoint: FastAPIEntrypoint) -> None:
-        """Shutdown hook.
-
-        Args:
-            entrypoint: The entrypoint that is shutting down.
-
-        """
-        # No shutdown logic needed
+            component.get_app().add_exception_handler(exception, handler)
+        return component
 
 
-class FastAPIHealthCheckPlugin:
+class FastAPIHealthCheckPlugin(AbstractEntrypointPlugin[FastAPIEntrypoint]):
     """Plugin for adding health check endpoints to FastAPI entrypoints.
 
     Example:
@@ -342,11 +253,11 @@ class FastAPIHealthCheckPlugin:
         self._health_checkers = health_checkers or []
         self._config = config or HealthCheckConfig()
 
-    def apply(self, entrypoint: FastAPIEntrypoint) -> FastAPIEntrypoint:
+    def apply(self, component: FastAPIEntrypoint) -> FastAPIEntrypoint:
         """Apply health check endpoint to the entrypoint.
 
         Args:
-            entrypoint: The FastAPI entrypoint to configure.
+            component: The FastAPI entrypoint to configure.
 
         Returns:
             The configured entrypoint.
@@ -377,7 +288,7 @@ class FastAPIHealthCheckPlugin:
             "degraded": self._config.status_code_degraded,
         }
 
-        @entrypoint.get_app().get(
+        @component.get_app().get(
             self._config.route_path,
             response_model=FastAPIHealthCheckResponse,
             responses=responses,
@@ -395,37 +306,10 @@ class FastAPIHealthCheckPlugin:
                 status_code=status_code,
             )
 
-        return entrypoint
-
-    def validate(self, entrypoint: FastAPIEntrypoint) -> None:
-        """Validate plugin configuration.
-
-        Args:
-            entrypoint: The entrypoint to validate against.
-
-        """
-        # No validation needed - health checkers can be empty
-
-    async def on_startup(self, entrypoint: FastAPIEntrypoint) -> None:
-        """Startup hook.
-
-        Args:
-            entrypoint: The entrypoint that is starting up.
-
-        """
-        # No startup logic needed
-
-    async def on_shutdown(self, entrypoint: FastAPIEntrypoint) -> None:
-        """Shutdown hook.
-
-        Args:
-            entrypoint: The entrypoint that is shutting down.
-
-        """
-        # No shutdown logic needed
+        return component
 
 
-class FastAPIIdempotencyMiddlewarePlugin:
+class FastAPIIdempotencyMiddlewarePlugin(AbstractEntrypointPlugin[FastAPIEntrypoint]):
     """Plugin for adding idempotency middleware to FastAPI entrypoints.
 
     Requires either a Dishka container (via FastAPIDishkaPlugin) or a storage factory.
@@ -467,11 +351,11 @@ class FastAPIIdempotencyMiddlewarePlugin:
         self._idempotent_response_factory = idempotent_response_factory or fastapi_default_idempotency_response_factory
         self._idempotency_keys_storage_factory = idempotency_keys_storage_factory
 
-    def apply(self, entrypoint: FastAPIEntrypoint) -> FastAPIEntrypoint:
+    def apply(self, component: FastAPIEntrypoint) -> FastAPIEntrypoint:
         """Apply idempotency middleware to the entrypoint.
 
         Args:
-            entrypoint: The FastAPI entrypoint to configure.
+            component: The FastAPI entrypoint to configure.
 
         Returns:
             The configured entrypoint.
@@ -481,10 +365,10 @@ class FastAPIIdempotencyMiddlewarePlugin:
 
         """
         if self._idempotency_keys_storage_factory is not None:
-            entrypoint._idempotency_configured = True  # noqa: SLF001
+            component._idempotency_configured = True  # noqa: SLF001
             storage_factory = self._idempotency_keys_storage_factory
 
-            @entrypoint.get_app().middleware("http")
+            @component.get_app().middleware("http")
             async def idempotency_middleware_for_app(
                 request: Request,
                 call_next: Callable[[Request], Awaitable[Response]],
@@ -497,15 +381,15 @@ class FastAPIIdempotencyMiddlewarePlugin:
                     idempotent_response_factory=self._idempotent_response_factory,
                 )
 
-            return entrypoint
+            return component
 
         # Check if container exists or if DishkaPlugin is already in registry
-        fastapi_dishka_plugin = entrypoint.plugin_registry.get_plugin(FastAPIDishkaPlugin)
+        fastapi_dishka_plugin = component.plugin_registry.get_plugin(FastAPIDishkaPlugin)
 
         container = fastapi_dishka_plugin.get_container() if fastapi_dishka_plugin is not None else None
 
         # Check if DishkaPlugin is already applied using the public registry
-        has_dishka_plugin = entrypoint.plugin_registry.has_plugin(FastAPIDishkaPlugin)
+        has_dishka_plugin = component.plugin_registry.has_plugin(FastAPIDishkaPlugin)
 
         if container is None and not has_dishka_plugin:
             # No container and no DishkaPlugin to add one - validate immediately
@@ -517,7 +401,7 @@ class FastAPIIdempotencyMiddlewarePlugin:
         # If container is available now, set up middleware immediately
         if container is not None:
 
-            @entrypoint.get_app().middleware("http")
+            @component.get_app().middleware("http")
             async def idempotency_middleware_for_app(
                 request: Request,
                 call_next: Callable[[Request], Awaitable[Response]],
@@ -531,74 +415,13 @@ class FastAPIIdempotencyMiddlewarePlugin:
                         idempotent_response_factory=self._idempotent_response_factory,
                     )
 
-            entrypoint._idempotency_configured = True  # noqa: SLF001
+            component._idempotency_configured = True  # noqa: SLF001
 
-        entrypoint._idempotency_configured = True  # noqa: SLF001
-        return entrypoint
-
-    def validate(self, entrypoint: FastAPIEntrypoint) -> None:
-        """Validate plugin configuration.
-
-        Args:
-            entrypoint: The entrypoint to validate against.
-
-        Raises:
-            EntrypointInconsistencyError: If neither FastAPIDishkaPlugin container nor storage factory is provided.
-
-        """
-        fastapi_dishka_plugin = entrypoint.plugin_registry.get_plugin(FastAPIDishkaPlugin)
-        container = None if fastapi_dishka_plugin is None else fastapi_dishka_plugin.get_container()
-
-        if self._idempotency_keys_storage_factory is None and container is None:
-            raise EntrypointInconsistencyError(
-                "Idempotency middleware cannot be setup without a FastAPIDishkaPlugin container or "
-                "a factory function to create the idempotency keys storage"
-            )
-
-        # If using container and middleware wasn't set up in apply() (e.g., container was added later),
-        # set up middleware now
-        if (
-            self._idempotency_keys_storage_factory is None
-            and container is not None
-            and not entrypoint._idempotency_configured  # noqa: SLF001
-        ):
-
-            @entrypoint.get_app().middleware("http")
-            async def idempotency_middleware_for_app(
-                request: Request,
-                call_next: Callable[[Request], Awaitable[Response]],
-            ) -> Response:
-                """Idempotency middleware for the app."""
-                async with container(scope=Scope.REQUEST) as nested_container:
-                    return await fastapi_idempotency_middleware_handler(
-                        request,
-                        call_next,
-                        idempotency_keys_storage=await nested_container.get(AbstractIdempotencyKeysStorage),
-                        idempotent_response_factory=self._idempotent_response_factory,
-                    )
-
-            entrypoint._idempotency_configured = True  # noqa: SLF001
-
-    async def on_startup(self, entrypoint: FastAPIEntrypoint) -> None:
-        """Startup hook.
-
-        Args:
-            entrypoint: The entrypoint that is starting up.
-
-        """
-        # No startup logic needed
-
-    async def on_shutdown(self, entrypoint: FastAPIEntrypoint) -> None:
-        """Shutdown hook.
-
-        Args:
-            entrypoint: The entrypoint that is shutting down.
-
-        """
-        # No shutdown logic needed
+        component._idempotency_configured = True  # noqa: SLF001
+        return component
 
 
-class FastAPIFastStreamPlugin[T_BrokerType: BrokerType]:
+class FastAPIFastStreamPlugin[T_BrokerType: BrokerType](AbstractEntrypointPlugin[FastAPIEntrypoint]):
     """Plugin for adding FastStream integration to FastAPI entrypoints.
 
     Example:
@@ -634,52 +457,25 @@ class FastAPIFastStreamPlugin[T_BrokerType: BrokerType]:
         """
         return self._broker
 
-    def apply(self, entrypoint: FastAPIEntrypoint) -> FastAPIEntrypoint:
+    def apply(self, component: FastAPIEntrypoint) -> FastAPIEntrypoint:
         """Apply FastStream integration to the entrypoint.
 
         Args:
-            entrypoint: The FastAPI entrypoint to configure.
+            component: The FastAPI entrypoint to configure.
 
         Returns:
             The configured entrypoint.
 
         """
 
-        fastapi_dishka_plugin = entrypoint.plugin_registry.get_plugin(FastAPIDishkaPlugin)
+        fastapi_dishka_plugin = component.plugin_registry.get_plugin(FastAPIDishkaPlugin)
         if fastapi_dishka_plugin is not None:
             setup_dishka_faststream(container=fastapi_dishka_plugin.get_container(), broker=self._broker)
 
-        return entrypoint
-
-    def validate(self, entrypoint: FastAPIEntrypoint) -> None:
-        """Validate plugin configuration.
-
-        Args:
-            entrypoint: The entrypoint to validate against.
-
-        """
-        # No validation needed
-
-    async def on_startup(self, entrypoint: FastAPIEntrypoint) -> None:
-        """Startup hook.
-
-        Args:
-            entrypoint: The entrypoint that is starting up.
-
-        """
-        # No startup logic needed
-
-    async def on_shutdown(self, entrypoint: FastAPIEntrypoint) -> None:
-        """Shutdown hook.
-
-        Args:
-            entrypoint: The entrypoint that is shutting down.
-
-        """
-        # No shutdown logic needed
+        return component
 
 
-class FastAPIFastMCPPlugin:
+class FastAPIFastMCPPlugin(AbstractEntrypointPlugin[FastAPIEntrypoint]):
     """Plugin for adding FastMCP integration to FastAPI entrypoints.
 
     Example:
@@ -712,11 +508,11 @@ class FastAPIFastMCPPlugin:
         """
         return self._fastmcp
 
-    def apply(self, entrypoint: FastAPIEntrypoint) -> FastAPIEntrypoint:
+    def apply(self, component: FastAPIEntrypoint) -> FastAPIEntrypoint:
         """Apply FastMCP integration to the entrypoint.
 
         Args:
-            entrypoint: The FastAPI entrypoint to configure.
+            component: The FastAPI entrypoint to configure.
 
         Returns:
             The configured entrypoint.
@@ -724,35 +520,8 @@ class FastAPIFastMCPPlugin:
         """
         mcp_app = self._fastmcp.http_app(path=self._path)
 
-        entrypoint.get_app().router.lifespan_context = mcp_app.lifespan
+        component.get_app().router.lifespan_context = mcp_app.lifespan
 
-        entrypoint.get_app().mount(self._path, mcp_app)
+        component.get_app().mount(self._path, mcp_app)
 
-        return entrypoint
-
-    def validate(self, entrypoint: FastAPIEntrypoint) -> None:
-        """Validate plugin configuration.
-
-        Args:
-            entrypoint: The entrypoint to validate against.
-
-        """
-        # No validation needed
-
-    async def on_startup(self, entrypoint: FastAPIEntrypoint) -> None:
-        """Startup hook.
-
-        Args:
-            entrypoint: The entrypoint that is starting up.
-
-        """
-        # No startup logic needed
-
-    async def on_shutdown(self, entrypoint: FastAPIEntrypoint) -> None:
-        """Shutdown hook.
-
-        Args:
-            entrypoint: The entrypoint that is shutting down.
-
-        """
-        # No shutdown logic needed
+        return component

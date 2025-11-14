@@ -1,9 +1,13 @@
 """Base entrypoint."""
 
-from typing import Protocol
+from types import TracebackType
+from typing import Self
+
+from haolib.components.abstract import AbstractComponent, ComponentInconsistencyError
+from haolib.entrypoints.plugins.abstract import AbstractEntrypointPlugin, AbstractEntrypointPluginPreset
 
 
-class AbstractEntrypoint(Protocol):
+class AbstractEntrypoint(AbstractComponent[AbstractEntrypointPlugin, AbstractEntrypointPluginPreset]):
     """Abstract entrypoint protocol.
 
     Defines the interface that all entrypoints must implement. Entrypoints are
@@ -33,55 +37,44 @@ class AbstractEntrypoint(Protocol):
     """
 
     async def startup(self) -> None:
-        """Startup the entrypoint.
+        """Startup the FastAPI entrypoint.
 
-        Called before run() to validate configuration, initialize resources,
-        and perform any necessary setup. This method should be idempotent.
+        Initializes the uvicorn server and prepares it for execution.
+        Calls startup hooks for all plugins.
 
         Raises:
-            EntrypointInconsistencyError: If configuration is invalid or
-                required dependencies are missing.
+            EntrypointInconsistencyError: If configuration is invalid.
 
         """
-        ...
+
+    async def shutdown(self) -> None:
+        """Shutdown the FastAPI entrypoint.
+
+        Cleans up resources and stops the server. Calls shutdown hooks for all plugins.
+        This method is called after run() completes or is cancelled. Should be idempotent
+        and safe to call multiple times.
+
+        """
 
     async def run(self) -> None:
         """Run the entrypoint.
 
-        Main execution method that runs the entrypoint. This method should
-        run indefinitely until cancelled or an error occurs.
-
-        Raises:
-            Exception: Any exception that occurs during execution.
-
+        This method is called after startup() and should be overridden by subclasses.
         """
-        ...
 
-    async def shutdown(self) -> None:
-        """Shutdown the entrypoint.
+    async def __aenter__(self) -> Self:
+        """Enter context manager."""
+        await self.startup()
+        return self
 
-        Called after run() completes or is cancelled to cleanup resources,
-        close connections, and perform any necessary teardown. This method
-        should be idempotent and safe to call multiple times.
-
-        """
-        ...
-
-    def validate(self) -> None:
-        """Validate entrypoint configuration.
-
-        Validates that the entrypoint is properly configured and all required
-        dependencies are available. This method should be called before startup().
-
-        Raises:
-            EntrypointInconsistencyError: If configuration is invalid or
-                required dependencies are missing.
-
-        """
-        ...
+    async def __aexit__(
+        self, exc_type: type[BaseException] | None, exc_value: BaseException | None, traceback: TracebackType | None
+    ) -> None:
+        """Exit context manager."""
+        await self.shutdown()
 
 
-class EntrypointInconsistencyError(Exception):
+class EntrypointInconsistencyError(ComponentInconsistencyError):
     """Entrypoint inconsistency error.
 
     Raised when an entrypoint or component is misconfigured, has missing

@@ -6,16 +6,15 @@ from typing import TYPE_CHECKING, Any, Self
 
 from taskiq.api import run_receiver_task, run_scheduler_task
 
+from haolib.components.events import EventEmitter
+from haolib.components.plugins.registry import PluginRegistry
 from haolib.entrypoints.abstract import AbstractEntrypoint, EntrypointInconsistencyError
-from haolib.entrypoints.plugins.base import EntrypointPlugin, PluginPreset
+from haolib.entrypoints.events.abstract import EntrypointShutdownEvent, EntrypointStartupEvent
+from haolib.entrypoints.plugins.abstract import AbstractEntrypointPlugin, AbstractEntrypointPluginPreset
 from haolib.entrypoints.plugins.helpers import (
     apply_plugin,
     apply_preset,
-    call_plugin_shutdown_hooks,
-    call_plugin_startup_hooks,
-    validate_plugins,
 )
-from haolib.entrypoints.plugins.registry import PluginRegistry
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -162,10 +161,11 @@ class TaskiqEntrypoint(AbstractEntrypoint):
         self._scheduler_args: Sequence[Any] | None = None
         self._scheduler_kwargs: Mapping[str, Any] | None = None
         self._worker: TaskiqEntrypointWorker | None = None
-        self._plugins: list[EntrypointPlugin[Self]] = []
-        self._plugin_registry = PluginRegistry()
+        self._events = EventEmitter[Self]()
+        self._plugins: list[AbstractEntrypointPlugin[Self]] = []
+        self._plugin_registry = PluginRegistry[Self]()
 
-    def use_plugin(self, plugin: EntrypointPlugin[Self]) -> Self:
+    def use_plugin(self, plugin: AbstractEntrypointPlugin[Self]) -> Self:
         """Add and apply a plugin to the entrypoint.
 
         Plugins are applied immediately and stored for lifecycle hooks.
@@ -179,7 +179,13 @@ class TaskiqEntrypoint(AbstractEntrypoint):
         """
         return apply_plugin(self, plugin, self._plugins, self._plugin_registry)
 
-    def use_preset(self, preset: PluginPreset[Self]) -> Self:
+    def use_preset(
+        self,
+        preset: AbstractEntrypointPluginPreset[
+            Self,
+            AbstractEntrypointPlugin[Self],
+        ],
+    ) -> Self:
         """Add and apply a plugin preset to the entrypoint.
 
         Args:
@@ -191,23 +197,10 @@ class TaskiqEntrypoint(AbstractEntrypoint):
         """
         return apply_preset(self, preset, self._plugins, self._plugin_registry)
 
-    def validate(self) -> None:
-        """Validate Taskiq entrypoint configuration.
-
-        Validates that the entrypoint is properly configured and all required
-        dependencies are available. Also validates all plugins.
-
-        Raises:
-            EntrypointInconsistencyError: If configuration is invalid or
-                required dependencies are missing.
-
-        """
-        # Broker is guaranteed by type system (required in __init__)
-        # Check configuration consistency: must have worker or scheduler
-        if not self._should_run_worker and self._scheduler is None:
-            raise EntrypointInconsistencyError("Taskiq entrypoint must have either worker or scheduler configured.")
-
-        validate_plugins(self, self._plugins)
+    @property
+    def events(self) -> EventEmitter[Self]:
+        """Get the event emitter for the entrypoint."""
+        return self._events
 
     async def startup(self) -> None:
         """Startup the Taskiq entrypoint.
@@ -219,8 +212,6 @@ class TaskiqEntrypoint(AbstractEntrypoint):
             EntrypointInconsistencyError: If configuration is invalid.
 
         """
-        self.validate()
-
         self._worker = TaskiqEntrypointWorker(
             self._broker,
             self._scheduler,
@@ -233,7 +224,7 @@ class TaskiqEntrypoint(AbstractEntrypoint):
 
         await self._worker.startup()
 
-        await call_plugin_startup_hooks(self, self._plugins)
+        await self.events.emit(EntrypointStartupEvent(component=self))
 
     async def shutdown(self) -> None:
         """Shutdown the Taskiq entrypoint.
@@ -243,7 +234,7 @@ class TaskiqEntrypoint(AbstractEntrypoint):
         and safe to call multiple times.
 
         """
-        await call_plugin_shutdown_hooks(self, self._plugins)
+        await self.events.emit(EntrypointShutdownEvent(component=self))
 
         if self._worker is not None:
             await self._worker.shutdown()

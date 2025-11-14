@@ -4,7 +4,7 @@ from asyncio import TaskGroup
 from collections.abc import Sequence
 from typing import Self
 
-from haolib.entrypoints.abstract import AbstractEntrypoint, EntrypointInconsistencyError
+from haolib.entrypoints.abstract import AbstractEntrypoint
 
 
 class HAOrchestrator:
@@ -63,27 +63,10 @@ class HAOrchestrator:
             ```
 
         """
-        self._validate_entrypoint(entrypoint)
         self._entrypoints.append(entrypoint)
         return self
 
-    def _validate_entrypoint(self, entrypoint: AbstractEntrypoint) -> None:
-        """Validate an entrypoint before adding it.
-
-        Args:
-            entrypoint: The entrypoint to validate.
-
-        Raises:
-            EntrypointInconsistencyError: If entrypoint is invalid.
-
-        """
-
-        try:
-            entrypoint.validate()
-        except Exception as e:
-            raise EntrypointInconsistencyError("Entrypoint validation failed") from e
-
-    async def run_entrypoints(self, entrypoints: Sequence[AbstractEntrypoint] | None = None) -> None:  # noqa: C901, PLR0912
+    async def run_entrypoints(self, entrypoints: Sequence[AbstractEntrypoint] | None = None) -> None:  # noqa: C901
         """Run the entrypoints with full lifecycle management.
 
         Orchestrates entrypoints through their complete lifecycle:
@@ -119,10 +102,6 @@ class HAOrchestrator:
 
         if not self._entrypoints:
             return
-
-        # Validate all entrypoints
-        for entrypoint in self._entrypoints:
-            self._validate_entrypoint(entrypoint)
 
         # Startup phase - initialize all entrypoints
         startup_errors: list[Exception] = []

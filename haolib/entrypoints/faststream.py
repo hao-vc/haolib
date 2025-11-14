@@ -3,90 +3,23 @@
 import logging
 from typing import TYPE_CHECKING, Any, Self
 
+from haolib.components.events import EventEmitter
+from haolib.components.plugins.registry import PluginRegistry
 from haolib.entrypoints.abstract import (
     AbstractEntrypoint,
     EntrypointInconsistencyError,
 )
-from haolib.entrypoints.plugins.base import EntrypointPlugin, PluginPreset
+from haolib.entrypoints.events.abstract import EntrypointShutdownEvent, EntrypointStartupEvent
+from haolib.entrypoints.plugins.abstract import AbstractEntrypointPlugin, AbstractEntrypointPluginPreset
 from haolib.entrypoints.plugins.helpers import (
     apply_plugin,
     apply_preset,
-    call_plugin_shutdown_hooks,
-    call_plugin_startup_hooks,
-    validate_plugins,
 )
-from haolib.entrypoints.plugins.registry import PluginRegistry
-from haolib.enums.base import BaseEnum
-from haolib.observability.setupper import ObservabilitySetupper
 
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from faststream import FastStream
-    from faststream._internal.broker import BrokerUsecase as BrokerType
-
-
-class FastStreamEntrypointBrokerType(BaseEnum):
-    """FastStream entrypoint broker type."""
-
-    AIOKAFKA = "AIOKAFKA"
-    CONFLUENT = "CONFLUENT"
-    NATS = "NATS"
-    RABBITMQ = "RABBITMQ"
-    REDIS = "REDIS"
-
-
-def _setup_observability_to_broker(
-    observability_settuper: ObservabilitySetupper,
-    broker_type: FastStreamEntrypointBrokerType,
-    broker: BrokerType[Any, Any],
-) -> None:
-    """Setup observability.
-
-    Args:
-        observability_settuper: The observability settuper.
-        broker_type: The type of the broker.
-        broker: The broker.
-
-    """
-    tracer_provider = observability_settuper.get_tracer_provider()
-    if tracer_provider is None:
-        raise EntrypointInconsistencyError("Tracer provider is not set.")
-
-    if broker_type == FastStreamEntrypointBrokerType.AIOKAFKA:
-        from faststream.kafka.opentelemetry import (  # noqa: PLC0415
-            KafkaTelemetryMiddleware as AIOKafkaTelemetryMiddleware,
-        )
-
-        broker.add_middleware(AIOKafkaTelemetryMiddleware(tracer_provider=tracer_provider))
-
-    if broker_type == FastStreamEntrypointBrokerType.CONFLUENT:
-        from faststream.confluent.opentelemetry import (  # noqa: PLC0415
-            KafkaTelemetryMiddleware as ConfluentKafkaTelemetryMiddleware,
-        )
-
-        broker.add_middleware(ConfluentKafkaTelemetryMiddleware(tracer_provider=tracer_provider))
-
-    if broker_type == FastStreamEntrypointBrokerType.RABBITMQ:
-        from faststream.rabbit.opentelemetry import (  # noqa: PLC0415
-            RabbitTelemetryMiddleware as RabbitMQTelemetryMiddleware,
-        )
-
-        broker.add_middleware(RabbitMQTelemetryMiddleware(tracer_provider=tracer_provider))
-
-    if broker_type == FastStreamEntrypointBrokerType.NATS:
-        from faststream.nats.opentelemetry import (  # noqa: PLC0415
-            NatsTelemetryMiddleware as NATSTelemetryMiddleware,
-        )
-
-        broker.add_middleware(NATSTelemetryMiddleware(tracer_provider=tracer_provider))
-
-    if broker_type == FastStreamEntrypointBrokerType.REDIS:
-        from faststream.redis.opentelemetry import (  # noqa: PLC0415
-            RedisTelemetryMiddleware,
-        )
-
-        broker.add_middleware(RedisTelemetryMiddleware(tracer_provider=tracer_provider))
 
 
 class FastStreamEntrypoint(AbstractEntrypoint):
@@ -138,10 +71,16 @@ class FastStreamEntrypoint(AbstractEntrypoint):
         self._run_args = args
         self._run_kwargs = kwargs
         self._app: FastStream = app
-        self._plugins: list[EntrypointPlugin[Self]] = []
-        self._plugin_registry = PluginRegistry()
+        self._events = EventEmitter[Self]()
+        self._plugins: list[AbstractEntrypointPlugin[Self]] = []
+        self._plugin_registry = PluginRegistry[Self]()
 
-    def use_plugin(self, plugin: EntrypointPlugin[Self]) -> Self:
+    @property
+    def events(self) -> EventEmitter[Self]:
+        """Get the event emitter for the entrypoint."""
+        return self._events
+
+    def use_plugin(self, plugin: AbstractEntrypointPlugin[Self]) -> Self:
         """Add and apply a plugin to the entrypoint.
 
         Plugins are applied immediately and stored for lifecycle hooks.
@@ -160,7 +99,13 @@ class FastStreamEntrypoint(AbstractEntrypoint):
         """
         return apply_plugin(self, plugin, self._plugins, self._plugin_registry)
 
-    def use_preset(self, preset: PluginPreset[Self]) -> Self:
+    def use_preset(
+        self,
+        preset: AbstractEntrypointPluginPreset[
+            Self,
+            AbstractEntrypointPlugin[Self],
+        ],
+    ) -> Self:
         """Add and apply a plugin preset to the entrypoint.
 
         Args:
@@ -171,23 +116,6 @@ class FastStreamEntrypoint(AbstractEntrypoint):
 
         """
         return apply_preset(self, preset, self._plugins, self._plugin_registry)
-
-    def validate(self) -> None:
-        """Validate FastStream entrypoint configuration.
-
-        Validates that the entrypoint is properly configured and all required
-        dependencies are available. Also validates all plugins.
-
-        Raises:
-            EntrypointInconsistencyError: If configuration is invalid or
-                required dependencies are missing.
-
-        """
-        # App is guaranteed by type system, but broker configuration is runtime state
-        if self._app.broker is None:
-            raise EntrypointInconsistencyError("FastStream broker is not configured in the app.")
-
-        validate_plugins(self, self._plugins)
 
     @property
     def plugin_registry(self) -> PluginRegistry:
@@ -212,11 +140,8 @@ class FastStreamEntrypoint(AbstractEntrypoint):
             EntrypointInconsistencyError: If configuration is invalid.
 
         """
-        self.validate()
 
-        logger.info("FastStream entrypoint starting")
-
-        await call_plugin_startup_hooks(self, self._plugins)
+        await self.events.emit(EntrypointStartupEvent(component=self))
 
     async def shutdown(self) -> None:
         """Shutdown the FastStream entrypoint.
@@ -226,12 +151,7 @@ class FastStreamEntrypoint(AbstractEntrypoint):
         and safe to call multiple times.
 
         """
-        await call_plugin_shutdown_hooks(self, self._plugins)
-
-        if self._app is not None:
-            logger.info("Shutting down FastStream entrypoint")
-            # FastStream handles cleanup automatically when run() is cancelled
-            # Additional cleanup can be added here if needed
+        await self.events.emit(EntrypointShutdownEvent(component=self))
 
     def get_app(self) -> FastStream:
         """Get the FastStream application instance.

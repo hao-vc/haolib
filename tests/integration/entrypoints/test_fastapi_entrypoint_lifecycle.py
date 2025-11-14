@@ -19,19 +19,6 @@ from tests.integration.entrypoints.conftest import (
 )
 
 
-class TestFastAPIEntrypointValidation:
-    """Test FastAPI entrypoint validation."""
-
-    def test_validate_succeeds_with_valid_app(self, fastapi_entrypoint: FastAPIEntrypoint) -> None:
-        """Test that validation succeeds with a valid FastAPI app."""
-        fastapi_entrypoint.validate()
-
-    def test_validate_succeeds_with_valid_config(self, fastapi_entrypoint: FastAPIEntrypoint) -> None:
-        """Test that validation succeeds with valid configuration."""
-        # Validation should pass for properly configured entrypoint
-        fastapi_entrypoint.validate()  # Should not raise
-
-
 class TestFastAPIEntrypointStartup:
     """Test FastAPI entrypoint startup."""
 

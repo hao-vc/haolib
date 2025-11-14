@@ -1,21 +1,21 @@
 """FastAPI entrypoint."""
 
+from types import TracebackType
 from typing import Any, Self
 
 from fastapi import FastAPI
 from uvicorn import Config, Server
 
+from haolib.components.events import EventEmitter
+from haolib.components.plugins.registry import PluginRegistry
 from haolib.configs.server import ServerConfig
 from haolib.entrypoints.abstract import AbstractEntrypoint, EntrypointInconsistencyError
-from haolib.entrypoints.plugins.base import EntrypointPlugin, PluginPreset
+from haolib.entrypoints.events.abstract import EntrypointShutdownEvent, EntrypointStartupEvent
+from haolib.entrypoints.plugins.abstract import AbstractEntrypointPlugin, AbstractEntrypointPluginPreset
 from haolib.entrypoints.plugins.helpers import (
     apply_plugin,
     apply_preset,
-    call_plugin_shutdown_hooks,
-    call_plugin_startup_hooks,
-    validate_plugins,
 )
-from haolib.entrypoints.plugins.registry import PluginRegistry
 
 
 class FastAPIEntrypoint(AbstractEntrypoint):
@@ -62,10 +62,16 @@ class FastAPIEntrypoint(AbstractEntrypoint):
         self._server_config = server_config or ServerConfig()
         self._idempotency_configured = False  # Set by IdempotencyMiddlewarePlugin
         self._server: Server | None = None
-        self._plugins: list[EntrypointPlugin[Self]] = []
-        self._plugin_registry = PluginRegistry()
+        self._events = EventEmitter[Self]()
+        self._plugins: list[AbstractEntrypointPlugin[Self]] = []
+        self._plugin_registry = PluginRegistry[Self]()
 
-    def use_plugin(self, plugin: EntrypointPlugin[Self]) -> Self:
+    @property
+    def events(self) -> EventEmitter[Self]:
+        """Get the event emitter for the entrypoint."""
+        return self._events
+
+    def use_plugin(self, plugin: AbstractEntrypointPlugin[Self]) -> Self:
         """Add and apply a plugin to the entrypoint.
 
         Plugins are applied immediately and stored for lifecycle hooks.
@@ -78,13 +84,13 @@ class FastAPIEntrypoint(AbstractEntrypoint):
 
         Example:
             ```python
-            entrypoint = FastAPIEntrypoint(app=app).use_plugin(DishkaPlugin(container))
+            entrypoint = FastAPIEntrypoint(app=app).use_plugin(FastAPIDishkaPlugin(container))
             ```
 
         """
         return apply_plugin(self, plugin, self._plugins, self._plugin_registry)
 
-    def use_preset(self, preset: PluginPreset[Self]) -> Self:
+    def use_preset(self, preset: AbstractEntrypointPluginPreset[Self, AbstractEntrypointPlugin[Self]]) -> Self:
         """Add and apply a plugin preset to the entrypoint.
 
         Presets allow grouping related plugins together for easy application.
@@ -109,19 +115,6 @@ class FastAPIEntrypoint(AbstractEntrypoint):
         """
         return apply_preset(self, preset, self._plugins, self._plugin_registry)
 
-    def validate(self) -> None:
-        """Validate FastAPI entrypoint configuration.
-
-        Validates that the entrypoint is properly configured and all required
-        dependencies are available. Also validates all plugins.
-
-        Raises:
-            EntrypointInconsistencyError: If configuration is invalid or
-                required dependencies are missing.
-
-        """
-        validate_plugins(self, self._plugins)
-
     def get_app(self) -> FastAPI:
         """Get the FastAPI application instance.
 
@@ -132,7 +125,7 @@ class FastAPIEntrypoint(AbstractEntrypoint):
         return self._app
 
     @property
-    def plugin_registry(self) -> PluginRegistry:
+    def plugin_registry(self) -> PluginRegistry[Self]:
         """Get the plugin registry for plugin discovery.
 
         Provides read-only access to the plugin registry, allowing plugins
@@ -161,12 +154,10 @@ class FastAPIEntrypoint(AbstractEntrypoint):
             EntrypointInconsistencyError: If configuration is invalid.
 
         """
-        self.validate()
-
         # Create server instance
         self._server = Server(Config(self._app, host=self._server_config.host, port=self._server_config.port))
 
-        await call_plugin_startup_hooks(self, self._plugins)
+        await self.events.emit(EntrypointStartupEvent(component=self))
 
     async def shutdown(self) -> None:
         """Shutdown the FastAPI entrypoint.
@@ -176,12 +167,18 @@ class FastAPIEntrypoint(AbstractEntrypoint):
         and safe to call multiple times.
 
         """
-        await call_plugin_shutdown_hooks(self, self._plugins)
+        await self.events.emit(EntrypointShutdownEvent(component=self))
 
-        if self._server is not None:
-            # Server.shutdown() is called automatically when the serve() task is cancelled
-            # But we can ensure cleanup here if needed
-            self._server = None
+    async def __aenter__(self) -> Self:
+        """Enter context manager."""
+        await self.startup()
+        return self
+
+    async def __aexit__(
+        self, exc_type: type[BaseException] | None, exc_value: BaseException | None, traceback: TracebackType | None
+    ) -> None:
+        """Exit context manager."""
+        await self.shutdown()
 
     async def run(self, *args: Any, **kwargs: Any) -> None:
         """Run the FastAPI entrypoint.

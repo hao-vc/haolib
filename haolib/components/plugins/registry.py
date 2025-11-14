@@ -1,18 +1,17 @@
-"""Plugin registry for entrypoint plugin discovery."""
+"""Plugin registry for component plugins."""
 
 from collections.abc import Iterator
-from typing import Any, TypeVar, cast
+from typing import TYPE_CHECKING, cast
 
-from haolib.entrypoints.plugins.base import EntrypointPlugin
+if TYPE_CHECKING:
+    from haolib.components.abstract import AbstractComponent
+    from haolib.components.plugins.abstract import AbstractPlugin
 
-T = TypeVar("T", bound=EntrypointPlugin[Any])
 
+class PluginRegistry[T_Component: AbstractComponent]:
+    """Registry for component plugins.
 
-class PluginRegistry:
-    """Read-only registry for plugin discovery.
-
-    Provides type-safe methods for plugins to discover other plugins
-    without accessing private attributes.
+    Provides type-safe methods for plugins to discover other plugins.
 
     Example:
         ```python
@@ -29,12 +28,12 @@ class PluginRegistry:
 
     def __init__(self) -> None:
         """Initialize the plugin registry."""
-        self._plugins: list[EntrypointPlugin[Any]] = []
+        self._plugins: list[AbstractPlugin[T_Component]] = []
 
-    def add(self, plugin: EntrypointPlugin[Any]) -> None:
+    def add(self, plugin: AbstractPlugin[T_Component]) -> None:
         """Add a plugin to the registry.
 
-        This method should only be called by the entrypoint during plugin application.
+        This method should only be called by the component during plugin application.
         Plugins are added to the registry in the order they are applied.
 
         Args:
@@ -42,12 +41,12 @@ class PluginRegistry:
 
         Note:
             This is an internal method. Plugins are automatically registered when
-            using entrypoint.use_plugin() or entrypoint.use_preset().
+            using component.use_plugin() or component.use_preset().
 
         """
         self._plugins.append(plugin)
 
-    def has_plugin(self, plugin_type: type[T]) -> bool:
+    def has_plugin[T: AbstractPlugin](self, plugin_type: type[T]) -> bool:
         """Check if a plugin of the given type is registered.
 
         Args:
@@ -65,7 +64,7 @@ class PluginRegistry:
         """
         return any(isinstance(plugin, plugin_type) for plugin in self._plugins)
 
-    def get_plugin(self, plugin_type: type[T]) -> T | None:
+    def get_plugin[T: AbstractPlugin](self, plugin_type: type[T]) -> T | None:
         """Get a plugin of the given type.
 
         Returns the first plugin instance that matches the given type.
@@ -91,7 +90,7 @@ class PluginRegistry:
                 return cast("T", plugin)
         return None
 
-    def get_all_plugins(self) -> Iterator[EntrypointPlugin[Any]]:
+    def get_all_plugins(self) -> Iterator[AbstractPlugin[T_Component]]:
         """Get all registered plugins.
 
         Returns an iterator over all registered plugins in the order they were added.

@@ -13,14 +13,6 @@ from haolib.entrypoints.fastmcp import FastMCPEntrypoint
 from haolib.entrypoints.plugins.fastmcp import FastMCPExceptionHandlersPlugin
 
 
-class TestFastMCPEntrypointValidation:
-    """Test FastMCP entrypoint validation."""
-
-    def test_validate_succeeds_with_valid_app(self, fastmcp_entrypoint: FastMCPEntrypoint) -> None:
-        """Test that validation succeeds with a valid FastMCP app."""
-        fastmcp_entrypoint.validate()
-
-
 class TestFastMCPEntrypointLifecycle:
     """Test FastMCP entrypoint lifecycle methods."""
 

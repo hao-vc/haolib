@@ -12,26 +12,6 @@ from tests.integration.entrypoints.conftest import (
 )
 
 
-class TestTaskiqEntrypointValidation:
-    """Test Taskiq entrypoint validation."""
-
-    def test_validate_succeeds_with_worker(self, taskiq_entrypoint_with_worker: TaskiqEntrypoint) -> None:
-        """Test that validation succeeds with worker configured."""
-        taskiq_entrypoint_with_worker.validate()
-
-    def test_validate_succeeds_with_scheduler(self, taskiq_entrypoint_with_scheduler: TaskiqEntrypoint) -> None:
-        """Test that validation succeeds with scheduler configured."""
-        taskiq_entrypoint_with_scheduler.validate()
-
-    def test_validate_fails_without_worker_or_scheduler(self, taskiq_entrypoint: TaskiqEntrypoint) -> None:
-        """Test that validation fails without worker or scheduler."""
-        with pytest.raises(
-            EntrypointInconsistencyError,
-            match="must have either worker or scheduler configured",
-        ):
-            taskiq_entrypoint.validate()
-
-
 class TestTaskiqEntrypointLifecycle:
     """Test Taskiq entrypoint lifecycle methods."""
 
