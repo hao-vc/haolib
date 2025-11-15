@@ -1,13 +1,13 @@
 """Helper functions for plugin management in entrypoints."""
 
+from haolib.components.abstract import AbstractComponent
+from haolib.components.plugins.abstract import AbstractPlugin, AbstractPluginPreset
 from haolib.components.plugins.registry import PluginRegistry
-from haolib.entrypoints.abstract import AbstractEntrypoint
-from haolib.entrypoints.plugins.abstract import AbstractEntrypointPlugin, AbstractEntrypointPluginPreset
 
 
-def _register_plugin_if_needed[T_Entrypoint: AbstractEntrypoint](
-    plugin: AbstractEntrypointPlugin[T_Entrypoint],
-    plugin_registry: PluginRegistry[T_Entrypoint] | None,
+def _register_plugin_if_needed[T_Component: AbstractComponent](
+    plugin: AbstractPlugin[T_Component],
+    plugin_registry: PluginRegistry[T_Component] | None,
     component_version: str | None = None,
 ) -> None:
     """Register a plugin in the registry if registry is provided.
@@ -22,25 +22,23 @@ def _register_plugin_if_needed[T_Entrypoint: AbstractEntrypoint](
         plugin_registry.add(plugin, component_version=component_version)
 
 
-def apply_plugin[T_Entrypoint: AbstractEntrypoint](
-    entrypoint: T_Entrypoint,
-    plugin: AbstractEntrypointPlugin[T_Entrypoint],
-    plugins_list: list[AbstractEntrypointPlugin[T_Entrypoint]],
-    plugin_registry: PluginRegistry[T_Entrypoint] | None = None,
-) -> T_Entrypoint:
-    """Apply a plugin to an entrypoint.
+def apply_plugin[T_Component: AbstractComponent](
+    component: T_Component,
+    plugin: AbstractPlugin[T_Component],
+    plugin_registry: PluginRegistry[T_Component] | None = None,
+) -> T_Component:
+    """Apply a plugin to an component.
 
     This function adds the plugin to the plugins list, registers it in the
     registry (if provided), and calls the plugin's apply method.
 
     Args:
-        entrypoint: The entrypoint to configure.
+        component: The component to configure.
         plugin: The plugin to apply.
-        plugins_list: The list to store plugins in (entrypoint._plugins).
         plugin_registry: Optional plugin registry to register plugins in.
 
     Returns:
-        The configured entrypoint.
+        The configured component.
 
     Example:
         ```python
@@ -48,41 +46,37 @@ def apply_plugin[T_Entrypoint: AbstractEntrypoint](
 
         container = make_async_container(...)
         plugin = FastAPIDishkaPlugin(container)
-        entrypoint = apply_plugin(
-            entrypoint,
+        component = apply_plugin(
+            component,
             plugin,
-            entrypoint._plugins,
-            entrypoint.plugin_registry,
+            component.plugin_registry,
         )
         ```
 
     """
-    component_version = entrypoint.version
+    component_version = component.version
 
-    plugins_list.append(plugin)
     _register_plugin_if_needed(plugin, plugin_registry, component_version=component_version)
-    return plugin.apply(entrypoint)
+    return plugin.apply(component)
 
 
-def apply_preset[T_Entrypoint: AbstractEntrypoint](
-    entrypoint: T_Entrypoint,
-    preset: AbstractEntrypointPluginPreset[T_Entrypoint, AbstractEntrypointPlugin[T_Entrypoint]],
-    plugins_list: list[AbstractEntrypointPlugin[T_Entrypoint]],
-    plugin_registry: PluginRegistry[T_Entrypoint] | None = None,
-) -> T_Entrypoint:
-    """Apply a plugin preset to an entrypoint.
+def apply_preset[T_Component: AbstractComponent](
+    component: T_Component,
+    preset: AbstractPluginPreset[T_Component, AbstractPlugin[T_Component]],
+    plugin_registry: PluginRegistry[T_Component],
+) -> T_Component:
+    """Apply a plugin preset to an component.
 
     This function applies the preset to the entrypoint and registers all
     individual plugins from the preset in the registry (if provided).
 
     Args:
-        entrypoint: The entrypoint to configure.
+        component: The component to configure.
         preset: The plugin preset to apply.
-        plugins_list: The list to store plugins in (entrypoint._plugins).
         plugin_registry: Optional plugin registry to register plugins in.
 
     Returns:
-        The configured entrypoint.
+        The configured component.
 
     Example:
         ```python
@@ -93,21 +87,20 @@ def apply_preset[T_Entrypoint: AbstractEntrypoint](
             FastAPIDishkaPlugin(container),
             FastAPICORSMiddlewarePlugin(),
         )
-        entrypoint = apply_preset(
-            entrypoint,
+        component = apply_preset(
+            component,
             preset,
-            entrypoint._plugins,
-            entrypoint.plugin_registry,
+            component.plugin_registry,
         )
         ```
 
     """
-    component_version = entrypoint.version
+    component_version = component.version
 
-    result = preset.apply(entrypoint)
+    result = preset.apply(component)
     # Store individual plugins from preset for lifecycle hooks
+
     for preset_plugin in preset.plugins:
-        if preset_plugin not in plugins_list:
-            plugins_list.append(preset_plugin)
+        if not plugin_registry.has_plugin(type(preset_plugin)):
             _register_plugin_if_needed(preset_plugin, plugin_registry, component_version=component_version)
     return result

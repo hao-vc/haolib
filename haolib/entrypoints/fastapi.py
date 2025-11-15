@@ -7,15 +7,12 @@ from fastapi import FastAPI
 from uvicorn import Config, Server
 
 from haolib.components.events import EventEmitter
+from haolib.components.plugins.helpers import apply_plugin, apply_preset
 from haolib.components.plugins.registry import PluginRegistry
 from haolib.configs.server import ServerConfig
 from haolib.entrypoints.abstract import AbstractEntrypoint, EntrypointInconsistencyError
 from haolib.entrypoints.events.abstract import EntrypointShutdownEvent, EntrypointStartupEvent
 from haolib.entrypoints.plugins.abstract import AbstractEntrypointPlugin, AbstractEntrypointPluginPreset
-from haolib.entrypoints.plugins.helpers import (
-    apply_plugin,
-    apply_preset,
-)
 
 
 class FastAPIEntrypoint(AbstractEntrypoint):
@@ -63,7 +60,6 @@ class FastAPIEntrypoint(AbstractEntrypoint):
         self._idempotency_configured = False  # Set by IdempotencyMiddlewarePlugin
         self._server: Server | None = None
         self._events = EventEmitter[Self]()
-        self._plugins: list[AbstractEntrypointPlugin[Self]] = []
         self._plugin_registry = PluginRegistry[Self]()
 
     @property
@@ -93,7 +89,7 @@ class FastAPIEntrypoint(AbstractEntrypoint):
             ```
 
         """
-        return apply_plugin(self, plugin, self._plugins, self._plugin_registry)
+        return apply_plugin(self, plugin, self._plugin_registry)
 
     def use_preset(self, preset: AbstractEntrypointPluginPreset[Self, AbstractEntrypointPlugin[Self]]) -> Self:
         """Add and apply a plugin preset to the entrypoint.
@@ -118,7 +114,7 @@ class FastAPIEntrypoint(AbstractEntrypoint):
             ```
 
         """
-        return apply_preset(self, preset, self._plugins, self._plugin_registry)
+        return apply_preset(self, preset, self._plugin_registry)
 
     def get_app(self) -> FastAPI:
         """Get the FastAPI application instance.

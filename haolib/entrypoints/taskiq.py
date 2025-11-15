@@ -7,14 +7,11 @@ from typing import TYPE_CHECKING, Any, Self
 from taskiq.api import run_receiver_task, run_scheduler_task
 
 from haolib.components.events import EventEmitter
+from haolib.components.plugins.helpers import apply_plugin, apply_preset
 from haolib.components.plugins.registry import PluginRegistry
 from haolib.entrypoints.abstract import AbstractEntrypoint, EntrypointInconsistencyError
 from haolib.entrypoints.events.abstract import EntrypointShutdownEvent, EntrypointStartupEvent
 from haolib.entrypoints.plugins.abstract import AbstractEntrypointPlugin, AbstractEntrypointPluginPreset
-from haolib.entrypoints.plugins.helpers import (
-    apply_plugin,
-    apply_preset,
-)
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -162,7 +159,6 @@ class TaskiqEntrypoint(AbstractEntrypoint):
         self._scheduler_kwargs: Mapping[str, Any] | None = None
         self._worker: TaskiqEntrypointWorker | None = None
         self._events = EventEmitter[Self]()
-        self._plugins: list[AbstractEntrypointPlugin[Self]] = []
         self._plugin_registry = PluginRegistry[Self]()
 
     def use_plugin(self, plugin: AbstractEntrypointPlugin[Self]) -> Self:
@@ -177,7 +173,7 @@ class TaskiqEntrypoint(AbstractEntrypoint):
             Self for method chaining.
 
         """
-        return apply_plugin(self, plugin, self._plugins, self._plugin_registry)
+        return apply_plugin(self, plugin, self._plugin_registry)
 
     def use_preset(
         self,
@@ -195,7 +191,7 @@ class TaskiqEntrypoint(AbstractEntrypoint):
             Self for method chaining.
 
         """
-        return apply_preset(self, preset, self._plugins, self._plugin_registry)
+        return apply_preset(self, preset, self._plugin_registry)
 
     @property
     def version(self) -> str:

@@ -4,16 +4,13 @@ import logging
 from typing import TYPE_CHECKING, Any, Self
 
 from haolib.components.events import EventEmitter
+from haolib.components.plugins.helpers import apply_plugin, apply_preset
 from haolib.components.plugins.registry import PluginRegistry
 from haolib.entrypoints.abstract import (
     AbstractEntrypoint,
 )
 from haolib.entrypoints.events.abstract import EntrypointShutdownEvent, EntrypointStartupEvent
 from haolib.entrypoints.plugins.abstract import AbstractEntrypointPlugin, AbstractEntrypointPluginPreset
-from haolib.entrypoints.plugins.helpers import (
-    apply_plugin,
-    apply_preset,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -90,7 +87,7 @@ class FastMCPEntrypoint(AbstractEntrypoint):
             Self for method chaining.
 
         """
-        return apply_plugin(self, plugin, self._plugins, self._plugin_registry)
+        return apply_plugin(self, plugin, self._plugin_registry)
 
     def use_preset(
         self,
@@ -108,7 +105,7 @@ class FastMCPEntrypoint(AbstractEntrypoint):
             Self for method chaining.
 
         """
-        return apply_preset(self, preset, self._plugins, self._plugin_registry)
+        return apply_preset(self, preset, self._plugin_registry)
 
     async def startup(self) -> None:
         """Startup the FastMCP entrypoint.
