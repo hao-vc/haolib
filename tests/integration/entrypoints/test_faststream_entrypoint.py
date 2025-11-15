@@ -11,10 +11,8 @@ from haolib.entrypoints.abstract import EntrypointInconsistencyError
 from haolib.entrypoints.faststream import (
     FastStreamEntrypoint,
 )
-from haolib.entrypoints.plugins.faststream import (
-    FastStreamDishkaPlugin,
-    FastStreamExceptionHandlersPlugin,
-)
+from haolib.entrypoints.plugins.faststream.dishka import FastStreamDishkaPlugin
+from haolib.entrypoints.plugins.faststream.exceptions import FastStreamExceptionHandlersPlugin
 from tests.integration.entrypoints.conftest import (
     run_entrypoint_briefly,
 )

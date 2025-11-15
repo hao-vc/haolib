@@ -26,7 +26,7 @@ from haolib.entrypoints.fastmcp import FastMCPEntrypoint
 from haolib.entrypoints.faststream import (
     FastStreamEntrypoint,
 )
-from haolib.entrypoints.plugins.fastapi import FastAPIDishkaPlugin
+from haolib.entrypoints.plugins.fastapi.dishka import FastAPIDishkaPlugin
 from haolib.entrypoints.taskiq import TaskiqEntrypoint
 
 # Import container fixture from parent conftest

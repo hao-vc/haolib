@@ -10,7 +10,7 @@ import pytest
 from fastmcp.server.middleware import MiddlewareContext
 
 from haolib.entrypoints.fastmcp import FastMCPEntrypoint
-from haolib.entrypoints.plugins.fastmcp import FastMCPExceptionHandlersPlugin
+from haolib.entrypoints.plugins.fastmcp.exceptions import FastMCPExceptionHandlersPlugin
 
 
 class TestFastMCPEntrypointLifecycle:

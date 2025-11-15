@@ -1,4 +1,4 @@
-"""FastMCP entrypoint plugins."""
+"""FastMCP exceptions plugin."""
 
 from collections.abc import Callable
 

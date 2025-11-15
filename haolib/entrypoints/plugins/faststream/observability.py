@@ -1,11 +1,6 @@
-"""FastStream entrypoint plugins."""
+"""FastStream observability plugin."""
 
-from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
-
-from dishka import AsyncContainer
-from dishka.integrations.faststream import setup_dishka
-from faststream.middlewares.exception import ExceptionMiddleware
 
 from haolib.entrypoints.abstract import EntrypointInconsistencyError
 from haolib.entrypoints.faststream import (
@@ -80,126 +75,6 @@ def _setup_observability_to_broker(
         )
 
         broker.add_middleware(RedisTelemetryMiddleware(tracer_provider=tracer_provider))
-
-
-class FastStreamDishkaPlugin(AbstractEntrypointPlugin[FastStreamEntrypoint]):
-    """Plugin for adding Dishka dependency injection to FastStream entrypoints.
-
-    Example:
-        ```python
-        from dishka import make_async_container
-
-        container = make_async_container(...)
-        entrypoint = FastStreamEntrypoint(app=app).use_plugin(FastStreamDishkaPlugin(container))
-        ```
-
-    """
-
-    def __init__(self, container: AsyncContainer) -> None:
-        """Initialize the FastStream Dishka plugin.
-
-        Args:
-            container: The Dishka async container instance.
-
-        """
-        self._container = container
-
-    def apply(self, component: FastStreamEntrypoint) -> FastStreamEntrypoint:
-        """Apply Dishka to the entrypoint.
-
-        Args:
-            component: The FastStream entrypoint to configure.
-
-        Returns:
-            The configured entrypoint.
-
-        """
-        setup_dishka(container=self._container, app=component.get_app(), finalize_container=False)
-        return component
-
-    def validate(self, component: FastStreamEntrypoint) -> None:
-        """Validate plugin configuration.
-
-        Args:
-            component: The entrypoint to validate against.
-
-        """
-        # No validation needed - container is required in __init__
-
-    async def on_startup(self, component: FastStreamEntrypoint) -> None:
-        """Startup hook.
-
-        Args:
-            component: The entrypoint that is starting up.
-
-        """
-        # No startup logic needed
-
-    async def on_shutdown(self, component: FastStreamEntrypoint) -> None:
-        """Shutdown hook.
-
-        Args:
-            component: The entrypoint that is shutting down.
-
-        """
-        # No shutdown logic needed
-
-
-class FastStreamExceptionHandlersPlugin(AbstractEntrypointPlugin[FastStreamEntrypoint]):
-    """Plugin for adding exception handlers to FastStream entrypoints.
-
-    Example:
-        ```python
-        exception_handlers = {ValueError: lambda exc: logger.error(f"Error: {exc}")}
-        entrypoint = FastStreamEntrypoint(app=app).use_plugin(
-            FastStreamExceptionHandlersPlugin(exception_handlers)
-        )
-        ```
-
-    """
-
-    def __init__(self, exception_handlers: dict[type[Exception], Callable[..., Any]]) -> None:
-        """Initialize the FastStream exception handlers plugin.
-
-        Args:
-            exception_handlers: Dictionary mapping exception types to handler functions.
-
-        """
-        self._exception_handlers = exception_handlers
-
-    def apply(self, component: FastStreamEntrypoint) -> FastStreamEntrypoint:
-        """Apply exception handlers to the entrypoint.
-
-        Args:
-            component: The FastStream entrypoint to configure.
-
-        Returns:
-            The configured entrypoint.
-
-        Raises:
-            EntrypointInconsistencyError: If broker is not configured.
-
-        """
-        app = component.get_app()
-        if app.broker is None:
-            raise EntrypointInconsistencyError("FastStream broker is not set.")
-
-        app.broker.add_middleware(ExceptionMiddleware(publish_handlers=self._exception_handlers))
-        return component
-
-    def validate(self, component: FastStreamEntrypoint) -> None:
-        """Validate plugin configuration.
-
-        Args:
-            component: The entrypoint to validate against.
-
-        Raises:
-            EntrypointInconsistencyError: If broker is not configured.
-
-        """
-        app = component.get_app()
-        if app.broker is None:
-            raise EntrypointInconsistencyError("FastStream broker is not set.")
 
 
 class FastStreamObservabilityPlugin(AbstractEntrypointPlugin[FastStreamEntrypoint]):

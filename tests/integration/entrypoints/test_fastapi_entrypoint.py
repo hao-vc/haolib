@@ -15,16 +15,14 @@ from haolib.configs.cors import CORSConfig
 from haolib.entrypoints import HAOrchestrator
 from haolib.entrypoints.abstract import EntrypointInconsistencyError
 from haolib.entrypoints.fastapi import FastAPIEntrypoint
-from haolib.entrypoints.plugins.fastapi import (
-    FastAPICORSMiddlewarePlugin,
-    FastAPIDishkaPlugin,
-    FastAPIExceptionHandlersPlugin,
-    FastAPIFastMCPPlugin,
-    FastAPIFastStreamPlugin,
-    FastAPIIdempotencyMiddlewarePlugin,
-    FastAPIObservabilityPlugin,
-)
-from haolib.entrypoints.plugins.taskiq import TaskiqDishkaPlugin
+from haolib.entrypoints.plugins.fastapi.cors import FastAPICORSMiddlewarePlugin
+from haolib.entrypoints.plugins.fastapi.dishka import FastAPIDishkaPlugin
+from haolib.entrypoints.plugins.fastapi.exceptions import FastAPIExceptionHandlersPlugin
+from haolib.entrypoints.plugins.fastapi.fastmcp import FastAPIFastMCPPlugin
+from haolib.entrypoints.plugins.fastapi.faststream import FastAPIFastStreamPlugin
+from haolib.entrypoints.plugins.fastapi.idempotency import FastAPIIdempotencyMiddlewarePlugin
+from haolib.entrypoints.plugins.fastapi.observability import FastAPIObservabilityPlugin
+from haolib.entrypoints.plugins.taskiq.dishka import TaskiqDishkaPlugin
 from haolib.entrypoints.taskiq import TaskiqEntrypoint
 from haolib.observability.setupper import ObservabilitySetupper
 from haolib.web.idempotency.storages.abstract import AbstractIdempotencyKeysStorage

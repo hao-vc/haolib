@@ -7,13 +7,11 @@ from fastapi import FastAPI
 from haolib.configs.server import ServerConfig
 from haolib.entrypoints.abstract import EntrypointInconsistencyError
 from haolib.entrypoints.fastapi import FastAPIEntrypoint
-from haolib.entrypoints.plugins.fastapi import (
-    FastAPICORSMiddlewarePlugin,
-    FastAPIDishkaPlugin,
-    FastAPIExceptionHandlersPlugin,
-    FastAPIHealthCheckPlugin,
-    FastAPIIdempotencyMiddlewarePlugin,
-)
+from haolib.entrypoints.plugins.fastapi.cors import FastAPICORSMiddlewarePlugin
+from haolib.entrypoints.plugins.fastapi.dishka import FastAPIDishkaPlugin
+from haolib.entrypoints.plugins.fastapi.exceptions import FastAPIExceptionHandlersPlugin
+from haolib.entrypoints.plugins.fastapi.health import FastAPIHealthCheckPlugin
+from haolib.entrypoints.plugins.fastapi.idempotency import FastAPIIdempotencyMiddlewarePlugin
 from tests.integration.entrypoints.conftest import (
     run_entrypoint_briefly,
 )

@@ -1,4 +1,4 @@
-"""Taskiq entrypoint plugins."""
+"""Taskiq Dishka plugin."""
 
 from dishka import AsyncContainer
 from dishka.integrations.taskiq import setup_dishka as setup_dishka_taskiq

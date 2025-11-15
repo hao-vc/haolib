@@ -10,13 +10,12 @@ from faststream.confluent.broker import KafkaBroker
 from haolib.entrypoints.fastapi import FastAPIEntrypoint
 from haolib.entrypoints.fastmcp import FastMCPEntrypoint
 from haolib.entrypoints.faststream import FastStreamEntrypoint
-from haolib.entrypoints.plugins.fastapi import (
-    FastAPIDishkaPlugin,
-    FastAPIFastMCPPlugin,
-    FastAPIFastStreamPlugin,
-)
-from haolib.entrypoints.plugins.fastmcp import FastMCPExceptionHandlersPlugin
-from haolib.entrypoints.plugins.faststream import FastStreamDishkaPlugin, FastStreamExceptionHandlersPlugin
+from haolib.entrypoints.plugins.fastapi.dishka import FastAPIDishkaPlugin
+from haolib.entrypoints.plugins.fastapi.fastmcp import FastAPIFastMCPPlugin
+from haolib.entrypoints.plugins.fastapi.faststream import FastAPIFastStreamPlugin
+from haolib.entrypoints.plugins.fastmcp.exceptions import FastMCPExceptionHandlersPlugin
+from haolib.entrypoints.plugins.faststream.dishka import FastStreamDishkaPlugin
+from haolib.entrypoints.plugins.faststream.exceptions import FastStreamExceptionHandlersPlugin
 
 
 class TestFastMCPComponentIntegration:

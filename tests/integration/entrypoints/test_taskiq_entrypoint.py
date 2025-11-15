@@ -5,7 +5,7 @@ from dishka import AsyncContainer
 from taskiq import AsyncBroker, TaskiqScheduler
 
 from haolib.entrypoints.abstract import EntrypointInconsistencyError
-from haolib.entrypoints.plugins.taskiq import TaskiqDishkaPlugin
+from haolib.entrypoints.plugins.taskiq.dishka import TaskiqDishkaPlugin
 from haolib.entrypoints.taskiq import TaskiqEntrypoint, TaskiqEntrypointWorker
 from tests.integration.entrypoints.conftest import (
     run_entrypoint_briefly,
