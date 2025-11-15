@@ -1,9 +1,27 @@
 """Abstract plugin."""
 
 from collections.abc import Sequence
-from typing import Protocol
+
+# haolib/components/plugins/metadata.py
+from dataclasses import dataclass
+from typing import Any, Protocol
 
 from haolib.components.abstract import AbstractComponent
+
+
+@dataclass
+class PluginMetadata:
+    """Metadata about a plugin."""
+
+    name: str
+    version: str
+    author: str | None = None
+    description: str | None = None
+    homepage: str | None = None
+    license_name: str | None = None
+    min_component_version: str | None = None
+    max_component_version: str | None = None
+    extra: dict[str, Any] | None = None
 
 
 class AbstractPlugin[T_Component: AbstractComponent](Protocol):
@@ -42,6 +60,14 @@ class AbstractPlugin[T_Component: AbstractComponent](Protocol):
         Plugins with same priority execute in application order.
         """
         return 0
+
+    @property
+    def metadata(self) -> PluginMetadata:
+        """Plugin metadata for versioning and compatibility."""
+        return PluginMetadata(
+            name=type(self).__name__,
+            version="1.0.0",
+        )
 
     @property
     def dependencies(self) -> Sequence[type[AbstractPlugin[T_Component]]]:

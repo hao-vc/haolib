@@ -198,6 +198,11 @@ class TaskiqEntrypoint(AbstractEntrypoint):
         return apply_preset(self, preset, self._plugins, self._plugin_registry)
 
     @property
+    def version(self) -> str:
+        """Get the version of the Taskiq entrypoint."""
+        return "1.0.0"
+
+    @property
     def events(self) -> EventEmitter[Self]:
         """Get the event emitter for the entrypoint."""
         return self._events

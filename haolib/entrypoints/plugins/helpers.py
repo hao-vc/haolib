@@ -8,16 +8,18 @@ from haolib.entrypoints.plugins.abstract import AbstractEntrypointPlugin, Abstra
 def _register_plugin_if_needed[T_Entrypoint: AbstractEntrypoint](
     plugin: AbstractEntrypointPlugin[T_Entrypoint],
     plugin_registry: PluginRegistry[T_Entrypoint] | None,
+    component_version: str | None = None,
 ) -> None:
     """Register a plugin in the registry if registry is provided.
 
     Args:
         plugin: The plugin to register.
         plugin_registry: Optional plugin registry to register the plugin in.
+        component_version: The component version to check for compatibility.
 
     """
     if plugin_registry is not None:
-        plugin_registry.add(plugin)
+        plugin_registry.add(plugin, component_version=component_version)
 
 
 def apply_plugin[T_Entrypoint: AbstractEntrypoint](
@@ -55,8 +57,10 @@ def apply_plugin[T_Entrypoint: AbstractEntrypoint](
         ```
 
     """
+    component_version = entrypoint.version
+
     plugins_list.append(plugin)
-    _register_plugin_if_needed(plugin, plugin_registry)
+    _register_plugin_if_needed(plugin, plugin_registry, component_version=component_version)
     return plugin.apply(entrypoint)
 
 
@@ -98,10 +102,12 @@ def apply_preset[T_Entrypoint: AbstractEntrypoint](
         ```
 
     """
+    component_version = entrypoint.version
+
     result = preset.apply(entrypoint)
     # Store individual plugins from preset for lifecycle hooks
     for preset_plugin in preset.plugins:
         if preset_plugin not in plugins_list:
             plugins_list.append(preset_plugin)
-            _register_plugin_if_needed(preset_plugin, plugin_registry)
+            _register_plugin_if_needed(preset_plugin, plugin_registry, component_version=component_version)
     return result

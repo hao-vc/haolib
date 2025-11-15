@@ -14,6 +14,6 @@ class AbstractEntrypointPlugin[T_Entrypoint: AbstractEntrypoint](AbstractPlugin[
 
 class AbstractEntrypointPluginPreset[
     T_Entrypoint: AbstractEntrypoint,
-    T_PluginType: AbstractEntrypointPlugin,
-](AbstractPluginPreset[T_Entrypoint, T_PluginType]):
+    T_Plugin: AbstractEntrypointPlugin,
+](AbstractPluginPreset[T_Entrypoint, T_Plugin]):
     """Abstract entrypoint plugin preset protocol."""

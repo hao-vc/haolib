@@ -4,10 +4,10 @@ from types import TracebackType
 from typing import TYPE_CHECKING, Protocol, Self
 
 from haolib.components.events import EventEmitter
-from haolib.components.plugins.registry import PluginRegistry
 
 if TYPE_CHECKING:
     from haolib.components.plugins.abstract import AbstractPlugin, AbstractPluginPreset
+    from haolib.components.plugins.registry import PluginRegistry
 
 
 class ComponentInconsistencyError(Exception):
@@ -20,6 +20,16 @@ class ComponentInconsistencyError(Exception):
 
 class AbstractComponent[T_Plugin: AbstractPlugin, T_PluginPreset: AbstractPluginPreset](Protocol):
     """Abstract component."""
+
+    @property
+    def version(self) -> str:
+        """Component version for plugin compatibility checking.
+
+        Returns:
+            Semantic version string (e.g., "1.0.0").
+
+        """
+        ...
 
     async def __aenter__(self) -> Self:
         """Enter the component context."""

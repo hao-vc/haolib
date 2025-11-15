@@ -69,6 +69,11 @@ class FastMCPEntrypoint(AbstractEntrypoint):
         self._plugin_registry = PluginRegistry[Self]()
 
     @property
+    def version(self) -> str:
+        """Get the version of the FastMCP entrypoint."""
+        return "1.0.0"
+
+    @property
     def events(self) -> EventEmitter[Self]:
         """Get the event emitter for the entrypoint."""
         return self._events
