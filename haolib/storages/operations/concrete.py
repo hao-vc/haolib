@@ -6,10 +6,13 @@ This allows for better type safety and IDE autocomplete.
 
 from collections.abc import AsyncIterator, Callable, Iterable
 from dataclasses import dataclass
-from typing import Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar, overload
 
 from haolib.storages.indexes.abstract import SearchIndex
-from haolib.storages.operations.base import Operation
+from haolib.storages.operations.base import Operation, Pipeline, TargetBoundOperation
+
+if TYPE_CHECKING:
+    from haolib.storages.targets.abstract import AbstractDataTarget
 
 T_Data = TypeVar("T_Data")
 
@@ -29,6 +32,43 @@ class CreateOperation[T_Data](Operation[Iterable[T_Data], list[T_Data]]):
     data: list[T_Data]
     """Data to create."""
 
+    @overload  # type: ignore[override]
+    def __or__(
+        self,
+        other: FilterOperation[T_Data],
+    ) -> Pipeline[Iterable[T_Data], list[T_Data], list[T_Data]]: ...
+
+    @overload  # type: ignore[override]
+    def __or__[T_Result](
+        self,
+        other: MapOperation[T_Data, T_Result],
+    ) -> Pipeline[Iterable[T_Data], list[T_Data], list[T_Result]]: ...
+
+    @overload  # type: ignore[override]
+    def __or__[T_Result](
+        self,
+        other: ReduceOperation[T_Data, T_Result],
+    ) -> Pipeline[Iterable[T_Data], list[T_Data], T_Result]: ...
+
+    @overload  # type: ignore[override]
+    def __or__[T_Result](
+        self,
+        other: TransformOperation[list[T_Data], T_Result],
+    ) -> Pipeline[Iterable[T_Data], list[T_Data], T_Result]: ...
+
+    @overload  # type: ignore[override]
+    def __or__(
+        self,
+        other: TargetBoundOperation[list[T_Data]],
+    ) -> Pipeline[Iterable[T_Data], list[T_Data], list[T_Data]]: ...
+
+    def __or__[T_NextResult](
+        self,
+        other: Operation[Any, T_NextResult] | TargetBoundOperation[Any],
+    ) -> Pipeline[Iterable[T_Data], list[T_Data], T_NextResult]:
+        """Compose with next operation, preserving type information."""
+        return Pipeline(first=self, second=other)
+
 
 @dataclass(frozen=True)
 class ReadOperation[T_Data](Operation[Any, AsyncIterator[T_Data]]):
@@ -47,6 +87,49 @@ class ReadOperation[T_Data](Operation[Any, AsyncIterator[T_Data]]):
 
     search_index: SearchIndex[T_Data]
     """Typed search index. Must contain data_type."""
+
+    @overload  # type: ignore[override]
+    def __or__(
+        self,
+        other: FilterOperation[T_Data],
+    ) -> Pipeline[Any, AsyncIterator[T_Data], list[T_Data]]: ...
+
+    @overload  # type: ignore[override]
+    def __or__[T_Result](
+        self,
+        other: MapOperation[T_Data, T_Result],
+    ) -> Pipeline[Any, AsyncIterator[T_Data], list[T_Result]]: ...
+
+    @overload  # type: ignore[override]
+    def __or__[T_Result](
+        self,
+        other: ReduceOperation[T_Data, T_Result],
+    ) -> Pipeline[Any, AsyncIterator[T_Data], T_Result]: ...
+
+    @overload  # type: ignore[override]
+    def __or__[T_Result](
+        self,
+        other: TransformOperation[AsyncIterator[T_Data], T_Result],
+    ) -> Pipeline[Any, AsyncIterator[T_Data], T_Result]: ...
+
+    @overload  # type: ignore[override]
+    def __or__(
+        self,
+        other: CreateOperation[T_Data],
+    ) -> Pipeline[Any, AsyncIterator[T_Data], list[T_Data]]: ...
+
+    @overload  # type: ignore[override]
+    def __or__(
+        self,
+        other: TargetBoundOperation[AsyncIterator[T_Data]],
+    ) -> Pipeline[Any, AsyncIterator[T_Data], AsyncIterator[T_Data]]: ...
+
+    def __or__[T_NextResult](
+        self,
+        other: Operation[Any, T_NextResult] | TargetBoundOperation[Any],
+    ) -> Pipeline[Any, AsyncIterator[T_Data], T_NextResult]:
+        """Compose with next operation, preserving type information."""
+        return Pipeline(first=self, second=other)
 
 
 @dataclass(frozen=True)
@@ -113,6 +196,49 @@ class FilterOperation[T_Data](Operation[Iterable[T_Data], list[T_Data]]):
     predicate: Callable[[T_Data], bool]
     """Function that returns True for items to keep."""
 
+    @overload  # type: ignore[override]
+    def __or__(
+        self,
+        other: FilterOperation[T_Data],
+    ) -> Pipeline[Iterable[T_Data], list[T_Data], list[T_Data]]: ...
+
+    @overload  # type: ignore[override]
+    def __or__[T_Result](
+        self,
+        other: MapOperation[T_Data, T_Result],
+    ) -> Pipeline[Iterable[T_Data], list[T_Data], list[T_Result]]: ...
+
+    @overload  # type: ignore[override]
+    def __or__[T_Result](
+        self,
+        other: ReduceOperation[T_Data, T_Result],
+    ) -> Pipeline[Iterable[T_Data], list[T_Data], T_Result]: ...
+
+    @overload  # type: ignore[override]
+    def __or__[T_Result](
+        self,
+        other: TransformOperation[list[T_Data], T_Result],
+    ) -> Pipeline[Iterable[T_Data], list[T_Data], T_Result]: ...
+
+    @overload  # type: ignore[override]
+    def __or__(
+        self,
+        other: CreateOperation[T_Data],
+    ) -> Pipeline[Iterable[T_Data], list[T_Data], list[T_Data]]: ...
+
+    @overload  # type: ignore[override]
+    def __or__(
+        self,
+        other: TargetBoundOperation[list[T_Data]],
+    ) -> Pipeline[Iterable[T_Data], list[T_Data], list[T_Data]]: ...
+
+    def __or__[T_NextResult](
+        self,
+        other: Operation[Any, T_NextResult] | TargetBoundOperation[Any],
+    ) -> Pipeline[Iterable[T_Data], list[T_Data], T_NextResult]:
+        """Compose with next operation, preserving type information."""
+        return Pipeline(first=self, second=other)
+
 
 @dataclass(frozen=True)
 class MapOperation[T_Data, T_Result](Operation[Iterable[T_Data], list[T_Result]]):
@@ -131,6 +257,55 @@ class MapOperation[T_Data, T_Result](Operation[Iterable[T_Data], list[T_Result]]
 
     mapper: Callable[[T_Data, int], T_Result]
     """Function (item, index) -> result."""
+
+    @overload  # type: ignore[override]
+    def __or__[T_NextResult](
+        self,
+        other: MapOperation[T_Result, T_NextResult],
+    ) -> Pipeline[Iterable[T_Data], list[T_Result], list[T_NextResult]]: ...
+
+    @overload  # type: ignore[override]
+    def __or__(
+        self,
+        other: FilterOperation[T_Result],
+    ) -> Pipeline[Iterable[T_Data], list[T_Result], list[T_Result]]: ...
+
+    @overload  # type: ignore[override]
+    def __or__[T_ReduceResult](
+        self,
+        other: ReduceOperation[T_Result, T_ReduceResult],
+    ) -> Pipeline[Iterable[T_Data], list[T_Result], T_ReduceResult]: ...
+
+    @overload  # type: ignore[override]
+    def __or__(
+        self,
+        other: ReduceOperation[Any, Any],
+    ) -> Pipeline[Iterable[T_Data], list[T_Result], Any]: ...
+
+    @overload  # type: ignore[override]
+    def __or__[T_TransformResult](
+        self,
+        other: TransformOperation[list[T_Result], T_TransformResult],
+    ) -> Pipeline[Iterable[T_Data], list[T_Result], T_TransformResult]: ...
+
+    @overload  # type: ignore[override]
+    def __or__(
+        self,
+        other: CreateOperation[T_Result],
+    ) -> Pipeline[Iterable[T_Data], list[T_Result], list[T_Result]]: ...
+
+    @overload  # type: ignore[override]
+    def __or__(
+        self,
+        other: TargetBoundOperation[list[T_Result]],
+    ) -> Pipeline[Iterable[T_Data], list[T_Result], list[T_Result]]: ...
+
+    def __or__[T_NextResult](
+        self,
+        other: Operation[Any, T_NextResult] | TargetBoundOperation[Any],
+    ) -> Pipeline[Iterable[T_Data], list[T_Result], T_NextResult]:
+        """Compose with next operation, preserving type information."""
+        return Pipeline(first=self, second=other)
 
 
 @dataclass(frozen=True)
@@ -155,6 +330,43 @@ class ReduceOperation[T_Data, T_Result](Operation[Iterable[T_Data], T_Result]):
     initial: T_Result
     """Initial value for accumulator."""
 
+    @overload  # type: ignore[override]
+    def __or__[T_TransformResult](
+        self,
+        other: TransformOperation[T_Result, T_TransformResult],
+    ) -> Pipeline[Iterable[T_Data], T_Result, T_TransformResult]: ...
+
+    @overload  # type: ignore[override]
+    def __or__(
+        self,
+        other: FilterOperation[T_Result],
+    ) -> Pipeline[Iterable[T_Data], T_Result, list[T_Result]]: ...
+
+    @overload  # type: ignore[override]
+    def __or__[T_MapResult](
+        self,
+        other: MapOperation[T_Result, T_MapResult],
+    ) -> Pipeline[Iterable[T_Data], T_Result, list[T_MapResult]]: ...
+
+    @overload  # type: ignore[override]
+    def __or__(
+        self,
+        other: CreateOperation[T_Result],
+    ) -> Pipeline[Iterable[T_Data], T_Result, list[T_Result]]: ...
+
+    @overload  # type: ignore[override]
+    def __or__(
+        self,
+        other: TargetBoundOperation[T_Result],
+    ) -> Pipeline[Iterable[T_Data], T_Result, T_Result]: ...
+
+    def __or__[T_NextResult](
+        self,
+        other: Operation[Any, T_NextResult] | TargetBoundOperation[Any],
+    ) -> Pipeline[Iterable[T_Data], T_Result, T_NextResult]:
+        """Compose with next operation, preserving type information."""
+        return Pipeline(first=self, second=other)
+
 
 @dataclass(frozen=True)
 class TransformOperation[T_Data, T_Result](Operation[T_Data, T_Result]):
@@ -173,3 +385,46 @@ class TransformOperation[T_Data, T_Result](Operation[T_Data, T_Result]):
 
     transformer: Callable[[T_Data], T_Result]
     """Function for transformation."""
+
+    @overload  # type: ignore[override]
+    def __or__[T_NextResult](
+        self,
+        other: TransformOperation[T_Result, T_NextResult],
+    ) -> Pipeline[T_Data, T_Result, T_NextResult]: ...
+
+    @overload  # type: ignore[override]
+    def __or__(
+        self,
+        other: FilterOperation[T_Result],
+    ) -> Pipeline[T_Data, T_Result, list[T_Result]]: ...
+
+    @overload  # type: ignore[override]
+    def __or__[T_MapResult](
+        self,
+        other: MapOperation[T_Result, T_MapResult],
+    ) -> Pipeline[T_Data, T_Result, list[T_MapResult]]: ...
+
+    @overload  # type: ignore[override]
+    def __or__[T_ReduceResult](
+        self,
+        other: ReduceOperation[T_Result, T_ReduceResult],
+    ) -> Pipeline[T_Data, T_Result, T_ReduceResult]: ...
+
+    @overload  # type: ignore[override]
+    def __or__(
+        self,
+        other: CreateOperation[T_Result],
+    ) -> Pipeline[T_Data, T_Result, list[T_Result]]: ...
+
+    @overload  # type: ignore[override]
+    def __or__(
+        self,
+        other: TargetBoundOperation[T_Result],
+    ) -> Pipeline[T_Data, T_Result, T_Result]: ...
+
+    def __or__[T_NextResult](
+        self,
+        other: Operation[Any, T_NextResult] | TargetBoundOperation[Any],
+    ) -> Pipeline[T_Data, T_Result, T_NextResult]:
+        """Compose with next operation, preserving type information."""
+        return Pipeline(first=self, second=other)

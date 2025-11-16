@@ -3,12 +3,10 @@
 Tests basic CRUD operations and pipelines for S3Storage.
 """
 
-from collections.abc import AsyncIterator
 from contextlib import suppress
 from typing import Any
 
 import pytest
-import pytest_asyncio
 
 from haolib.database.files.s3.clients.abstract import (
     AbstractS3Client,
@@ -16,48 +14,17 @@ from haolib.database.files.s3.clients.abstract import (
     S3BucketAlreadyOwnedByYouClientException,
     S3NoSuchKeyClientException,
 )
-from haolib.database.files.s3.clients.pydantic import S3DeleteObjectsDelete, S3DeleteObjectsDeleteObject
 from haolib.storages.data_types.registry import DataTypeRegistry
 from haolib.storages.dsl import createo, deleteo, filtero, mapo, reado, updateo
 from haolib.storages.indexes.path import PathIndex
 from haolib.storages.s3 import S3Storage
-from tests.integration.storages.conftest import User
+from tests.integration.storages.conftest import BUCKET_NAME, User
 
 # Constants for test values
-BUCKET_NAME = "test-storage-bucket"
+
 ALICE_AGE = 25
 BOB_AGE = 30
 ALICE_UPDATED_AGE = 26
-
-
-@pytest_asyncio.fixture
-async def s3_storage(
-    s3_client: AbstractS3Client,
-    registry: DataTypeRegistry,
-) -> AsyncIterator[S3Storage]:
-    """Create S3 storage for testing."""
-    # Create bucket (ignore if already exists)
-    with suppress(S3BucketAlreadyExistsClientException, S3BucketAlreadyOwnedByYouClientException):
-        await s3_client.create_bucket(BUCKET_NAME)
-
-    storage = S3Storage(
-        s3_client=s3_client,
-        bucket=BUCKET_NAME,
-        data_type_registry=registry,
-    )
-
-    yield storage
-
-    # Cleanup: delete all objects in bucket
-    with suppress(Exception):
-        # List all objects
-        response = await s3_client.list_objects_v2(bucket=BUCKET_NAME)
-        if response.contents:
-            # Delete objects
-            delete_objects = S3DeleteObjectsDelete(
-                objects=[S3DeleteObjectsDeleteObject(key=obj.key) for obj in response.contents if obj.key is not None]
-            )
-            await s3_client.delete_objects(bucket=BUCKET_NAME, delete=delete_objects)
 
 
 class TestS3StorageOperations:
@@ -74,29 +41,31 @@ class TestS3StorageOperations:
         result = await s3_storage.execute(createo(users))
 
         assert len(result) == 2
-        assert result[0].name == "Alice"
-        assert result[0].age == ALICE_AGE
-        assert result[0].email == "alice@example.com"
-        assert result[1].name == "Bob"
-        assert result[1].age == BOB_AGE
-        assert result[1].email == "bob@example.com"
+        # Result is now list of tuples (data, path)
+        user1, path1 = result[0]
+        user2, path2 = result[1]
+        assert user1.name == "Alice"
+        assert user1.age == ALICE_AGE
+        assert user1.email == "alice@example.com"
+        assert path1.startswith("User/")
+        assert user2.name == "Bob"
+        assert user2.age == BOB_AGE
+        assert user2.email == "bob@example.com"
+        assert path2.startswith("User/")
 
     @pytest.mark.asyncio
     async def test_execute_read(self, s3_storage: S3Storage, s3_client: AbstractS3Client) -> None:
         """Test read operation."""
         # First create a user
         user = User(name="Alice", age=ALICE_AGE, email="alice@example.com")
-        await s3_storage.execute(createo([user]))
+        result = await s3_storage.execute(createo([user]))
 
-        # Get the path (we need to know it for PathIndex)
-        # Since we use default path generator, we need to find the object
-        response = await s3_client.list_objects_v2(bucket=BUCKET_NAME, prefix="User/")
-        assert response.contents is not None and len(response.contents) == 1
-        path = response.contents[0].key
+        # Get the path from result
+        _, path = result[0]
         assert path is not None
 
         # Read using PathIndex
-        index = PathIndex(data_type=User, index_name="alice", path=path)
+        index = PathIndex(data_type=User, path=path)
         read_result = await s3_storage.execute(reado(search_index=index))
         async for read_user in read_result:
             assert read_user.name == "Alice"
@@ -108,16 +77,14 @@ class TestS3StorageOperations:
         """Test update operation."""
         # First create a user
         user = User(name="Alice", age=ALICE_AGE, email="alice@example.com")
-        await s3_storage.execute(createo([user]))
+        result = await s3_storage.execute(createo([user]))
 
-        # Get the path
-        response = await s3_client.list_objects_v2(bucket=BUCKET_NAME, prefix="User/")
-        assert response.contents is not None and len(response.contents) == 1
-        path = response.contents[0].key
+        # Get the path from result
+        _, path = result[0]
         assert path is not None
 
         # Update using PathIndex
-        index = PathIndex(data_type=User, index_name="alice", path=path)
+        index = PathIndex(data_type=User, path=path)
         result = await s3_storage.execute(updateo(search_index=index, patch={"age": ALICE_UPDATED_AGE}))
 
         assert len(result) == 1
@@ -135,16 +102,14 @@ class TestS3StorageOperations:
         """Test delete operation."""
         # First create a user
         user = User(name="Alice", age=ALICE_AGE, email="alice@example.com")
-        await s3_storage.execute(createo([user]))
+        result = await s3_storage.execute(createo([user]))
 
-        # Get the path
-        response = await s3_client.list_objects_v2(bucket=BUCKET_NAME, prefix="User/")
-        assert response.contents is not None and len(response.contents) == 1
-        path = response.contents[0].key
+        # Get the path from result
+        _, path = result[0]
         assert path is not None
 
         # Delete using PathIndex
-        index = PathIndex(data_type=User, index_name="alice", path=path)
+        index = PathIndex(data_type=User, path=path)
         deleted_count = await s3_storage.execute(deleteo(search_index=index))
 
         assert deleted_count == 1
@@ -161,16 +126,17 @@ class TestS3StorageOperations:
             User(name="Alice", age=ALICE_AGE, email="alice@example.com"),
             User(name="Bob", age=BOB_AGE, email="bob@example.com"),
         ]
-        await s3_storage.execute(createo(users))
+        result = await s3_storage.execute(createo(users))
 
-        # Get paths
-        response = await s3_client.list_objects_v2(bucket=BUCKET_NAME, prefix="User/")
-        assert response.contents is not None and len(response.contents) == 2
+        # Get paths from result
+        assert len(result) == 2
+        _, path1 = result[0]
+        _, path2 = result[1]
+        assert path1 is not None
+        assert path2 is not None
 
         # Read first user and filter
-        path = response.contents[0].key
-        assert path is not None
-        index = PathIndex(data_type=User, index_name="user", path=path)
+        index = PathIndex(data_type=User, path=path1)
         pipeline = reado(search_index=index) | filtero(lambda u: u.age >= 25)
 
         # Pipeline returns list after filter, not AsyncIterator
@@ -184,16 +150,14 @@ class TestS3StorageOperations:
         """Test pipeline with read and map."""
         # Create user
         user = User(name="Alice", age=ALICE_AGE, email="alice@example.com")
-        await s3_storage.execute(createo([user]))
+        result = await s3_storage.execute(createo([user]))
 
-        # Get path
-        response = await s3_client.list_objects_v2(bucket=BUCKET_NAME, prefix="User/")
-        assert response.contents is not None and len(response.contents) == 1
-        path = response.contents[0].key
+        # Get path from result
+        _, path = result[0]
         assert path is not None
 
         # Read and map to email
-        index = PathIndex(data_type=User, index_name="user", path=path)
+        index = PathIndex(data_type=User, path=path)
 
         def get_email(user: User, _idx: int) -> str:
             return user.email
@@ -207,7 +171,7 @@ class TestS3StorageOperations:
     @pytest.mark.asyncio
     async def test_execute_read_nonexistent(self, s3_storage: S3Storage) -> None:
         """Test read operation with non-existent path."""
-        index = PathIndex(data_type=User, index_name="nonexistent", path="User/nonexistent.json")
+        index = PathIndex(data_type=User, path="User/nonexistent.json")
 
         with pytest.raises(S3NoSuchKeyClientException):
             async for _ in await s3_storage.execute(reado(search_index=index)):
@@ -218,16 +182,14 @@ class TestS3StorageOperations:
         """Test update operation with callable patch."""
         # First create a user
         user = User(name="Alice", age=ALICE_AGE, email="alice@example.com")
-        await s3_storage.execute(createo([user]))
+        result = await s3_storage.execute(createo([user]))
 
-        # Get the path
-        response = await s3_client.list_objects_v2(bucket=BUCKET_NAME, prefix="User/")
-        assert response.contents is not None and len(response.contents) == 1
-        path = response.contents[0].key
+        # Get the path from result
+        _, path = result[0]
         assert path is not None
 
         # Update using callable patch
-        index = PathIndex(data_type=User, index_name="alice", path=path)
+        index = PathIndex(data_type=User, path=path)
 
         def update_age(user: User) -> User:
             return User(name=user.name, age=ALICE_UPDATED_AGE, email=user.email)
@@ -257,12 +219,10 @@ class TestS3StorageOperations:
         )
 
         user = User(name="Alice", age=ALICE_AGE, email="alice@example.com")
-        await storage.execute(createo([user]))
+        result = await storage.execute(createo([user]))
 
-        # Verify path
-        response = await s3_client.list_objects_v2(bucket=BUCKET_NAME, prefix="User/")
-        assert response.contents is not None and len(response.contents) == 1
-        key = response.contents[0].key
+        # Verify path from result
+        _, key = result[0]
         assert key is not None
         assert key == "User/custom.json"
 
@@ -286,12 +246,10 @@ class TestS3StorageOperations:
         result = await storage.execute(createo([image_data]))
 
         assert len(result) == 1
-        assert result[0] == image_data
+        data, key = result[0]
+        assert data == image_data
 
         # Verify path has .jpg extension
-        response = await s3_storage.s3_client.list_objects_v2(bucket=BUCKET_NAME, prefix="bytes/")
-        assert response.contents is not None and len(response.contents) == 1
-        key = response.contents[0].key
         assert key is not None
         assert key.endswith(".jpg")
 
@@ -329,12 +287,10 @@ class TestS3StorageOperations:
         result = await storage.execute(createo([jpeg_data]))
 
         assert len(result) == 1
-        assert result[0] == jpeg_data
+        data, key = result[0]
+        assert data == jpeg_data
 
         # Verify path has .jpg extension
-        response = await s3_client.list_objects_v2(bucket=BUCKET_NAME, prefix="bytes/")
-        assert response.contents is not None and len(response.contents) == 1
-        key = response.contents[0].key
         assert key is not None
         assert key.endswith(".jpg")
 
@@ -358,16 +314,14 @@ class TestS3StorageOperations:
 
         # Create image data
         image_data = b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x01\x00H\x00H\x00\x00"
-        await storage.execute(createo([image_data]))
+        result = await storage.execute(createo([image_data]))
 
-        # Get the path
-        response = await s3_client.list_objects_v2(bucket=BUCKET_NAME, prefix="bytes/")
-        assert response.contents is not None and len(response.contents) == 1
-        path = response.contents[0].key
+        # Get the path from result
+        _, path = result[0]
         assert path is not None
 
         # Read using PathIndex
-        index = PathIndex(data_type=bytes, index_name="image", path=path)
+        index = PathIndex(data_type=bytes, path=path)
         read_result = await storage.execute(reado(search_index=index))
         async for read_data in read_result:
             assert read_data == image_data

@@ -33,9 +33,16 @@ Example:
 
 from abc import ABC
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Union
+from typing import TYPE_CHECKING, Any, Union, overload
 
 if TYPE_CHECKING:
+    from haolib.storages.operations.concrete import (
+        CreateOperation,
+        FilterOperation,
+        MapOperation,
+        ReduceOperation,
+        TransformOperation,
+    )
     from haolib.storages.targets.abstract import AbstractDataTarget
 
 # Type alias for operations that can be composed
@@ -288,6 +295,88 @@ class TargetBoundOperation[T_Result]:
     """Operation to execute."""
     target: AbstractDataTarget
     """Target where operation should be executed."""
+
+    async def execute(self) -> T_Result:
+        """Execute the bound operation in the target.
+
+        Allows direct execution of bound operations without needing to call
+        storage.execute() explicitly.
+
+        Returns:
+            Result of operation execution.
+
+        Raises:
+            TargetError: If target operation fails.
+            TypeError: If operation type is not supported.
+
+        Example:
+            ```python
+            from haolib.storages.dsl import reado, createo, updateo, deleteo
+            from haolib.storages.indexes.params import ParamIndex
+
+            # Read operation
+            users = await (reado(search_index=ParamIndex(User)) ^ sql_storage).execute()
+
+            # Create operation
+            await (createo([user1, user2]) ^ sql_storage).execute()
+
+            # Update operation
+            await (updateo(search_index=ParamIndex(User, id=1), patch={"name": "New"}) ^ sql_storage).execute()
+
+            # Delete operation
+            await (deleteo(search_index=ParamIndex(User, id=1)) ^ sql_storage).execute()
+            ```
+
+        """
+        return await self.target.execute(self.operation)
+
+    @overload  # type: ignore[override]
+    def __or__(
+        self,
+        other: FilterOperation[T_Result],
+    ) -> Pipeline[Any, T_Result, list[T_Result]]: ...
+
+    @overload  # type: ignore[override]
+    def __or__(
+        self,
+        other: FilterOperation[Any],
+    ) -> Pipeline[Any, T_Result, list[T_Result]]: ...
+
+    @overload  # type: ignore[override]
+    def __or__[T_NextResult](
+        self,
+        other: MapOperation[T_Result, T_NextResult],
+    ) -> Pipeline[Any, T_Result, list[T_NextResult]]: ...
+
+    @overload  # type: ignore[override]
+    def __or__[T_NextResult](
+        self,
+        other: ReduceOperation[T_Result, T_NextResult],
+    ) -> Pipeline[Any, T_Result, T_NextResult]: ...
+
+    @overload  # type: ignore[override]
+    def __or__(
+        self,
+        other: ReduceOperation[Any, Any],
+    ) -> Pipeline[Any, T_Result, Any]: ...
+
+    @overload  # type: ignore[override]
+    def __or__[T_NextResult](
+        self,
+        other: TransformOperation[T_Result, T_NextResult],
+    ) -> Pipeline[Any, T_Result, T_NextResult]: ...
+
+    @overload  # type: ignore[override]
+    def __or__(
+        self,
+        other: CreateOperation[T_Result],
+    ) -> Pipeline[Any, T_Result, list[T_Result]]: ...
+
+    @overload  # type: ignore[override]
+    def __or__[T_NextResult](
+        self,
+        other: TargetBoundOperation[T_NextResult],
+    ) -> Pipeline[Any, T_Result, T_NextResult]: ...
 
     def __or__[T_NextResult](
         self,

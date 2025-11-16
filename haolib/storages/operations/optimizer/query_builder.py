@@ -65,7 +65,16 @@ class QueryBuilder:
         base_query = await index_handler.build_query(read_op.search_index, session)
 
         # Get storage model
-        registration = self._registry.get_for_user_type(read_op.search_index.data_type)
+        # For SQLQueryIndex, extract data_type from query
+        if isinstance(read_op.search_index, SQLQueryIndex):
+            # Extract model from query
+            storage_model = index_handler._extract_model_from_query(base_query)
+            if storage_model is None:
+                return None
+            registration = self._registry.get_for_storage_type(storage_model)
+        else:
+            registration = self._registry.get_for_user_type(read_op.search_index.data_type)
+
         if not registration:
             return None
 
@@ -86,10 +95,6 @@ class QueryBuilder:
                     return None
 
         # Create optimized ReadOperation with SQLQueryIndex
-        optimized_index = SQLQueryIndex(
-            data_type=read_op.search_index.data_type,
-            index_name=f"optimized_{read_op.search_index.index_name}",
-            query=query,
-        )
+        optimized_index = SQLQueryIndex(query=query)
 
         return ReadOperation(search_index=optimized_index)

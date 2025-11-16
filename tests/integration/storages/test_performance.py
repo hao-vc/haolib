@@ -103,11 +103,12 @@ class TestLoadPerformance:
         ]
         await real_sqlalchemy_storage.execute(createo(users))
 
-        index = ParamIndex(data_type=User, index_name="all_users")
+        index = ParamIndex(data_type=User)
 
         async def read_users() -> Any:
             result = await real_sqlalchemy_storage.execute(reado(search_index=index))
-            return [user async for user in result]
+            # result is now a list (collected inside transaction)
+            return result
 
         result = await benchmark(read_users)
 
@@ -124,7 +125,7 @@ class TestLoadPerformance:
         ]
         await real_sqlalchemy_storage.execute(createo(users))
 
-        index = ParamIndex(data_type=User, index_name="all_users")
+        index = ParamIndex(data_type=User)
         pipeline = reado(search_index=index) | filtero(lambda u: FILTER_MIN_AGE <= u.age <= FILTER_MAX_AGE)
 
         async def filter_users() -> Any:
@@ -146,7 +147,7 @@ class TestLoadPerformance:
         ]
         await real_sqlalchemy_storage.execute(createo(users))
 
-        index = ParamIndex(data_type=User, index_name="all_users")
+        index = ParamIndex(data_type=User)
         pipeline = reado(search_index=index) | filtero(lambda u: u.age >= FILTER_MIN_AGE) | mapo(lambda u, _idx: u.name)
 
         async def execute_pipeline() -> Any:
@@ -178,9 +179,10 @@ class TestLoadPerformance:
             await real_sqlalchemy_storage.execute(createo(users))
 
             # Read back
-            index = ParamIndex(data_type=User, index_name="all_users")
+            index = ParamIndex(data_type=User)
             read_result = await real_sqlalchemy_storage.execute(reado(search_index=index))
-            return [user async for user in read_result]
+            # read_result is now a list (collected inside transaction)
+            return read_result
 
         # Run concurrent operations
         start_time = time.time()
@@ -212,7 +214,7 @@ class TestLoadPerformance:
         await real_sqlalchemy_storage.execute(createo(users))
 
         # Update all users
-        index = ParamIndex(data_type=User, index_name="all_users")
+        index = ParamIndex(data_type=User)
 
         async def update_users() -> Any:
             return await real_sqlalchemy_storage.execute(updateo(search_index=index, patch={"age": UPDATE_AGE}))
@@ -232,7 +234,7 @@ class TestLoadPerformance:
         await real_sqlalchemy_storage.execute(createo(users))
 
         # Delete users with age = 25
-        index = ParamIndex(data_type=User, index_name="by_age", age=DELETE_AGE)
+        index = ParamIndex(data_type=User, age=DELETE_AGE)
 
         async def delete_users() -> Any:
             return await real_sqlalchemy_storage.execute(deleteo(search_index=index))

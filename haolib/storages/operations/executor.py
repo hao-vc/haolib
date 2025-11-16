@@ -109,29 +109,19 @@ class ExecutablePipelineExecutor:
 
         collect_operations(pipeline)
 
-        # Execute operations sequentially from left to right
-        result = previous_result
-        for idx, op in enumerate(operations):
-            # First operation doesn't need previous_result unless it's explicitly provided
-            # op can be Operation, TargetBoundOperation, or TargetSwitch
-            # For checking if it needs previous_result, we need to unwrap if needed
-            op_for_check: Operation[Any, Any] | None = None
-            if isinstance(op, TargetBoundOperation):
-                # TargetBoundOperation.operation is Operation or Pipeline, not TargetSwitch
-                if isinstance(op.operation, Operation):
-                    op_for_check = op.operation
-            elif isinstance(op, Operation):
-                op_for_check = op
-            # TargetSwitch doesn't need previous_result check here
+        # Group consecutive operations bound to the same storage for transaction grouping
+        grouped_operations = self._group_operations_by_storage(operations)
 
-            if idx == 0 and result is None:
-                if op_for_check is None or not self._operation_needs_previous_result(op_for_check):
-                    result = await self._execute_operation(op, previous_result=None)
-                else:
-                    result = await self._execute_operation(op, previous_result=result)
+        # Execute grouped operations sequentially from left to right
+        result = previous_result
+        for group in grouped_operations:
+            if isinstance(group, list):
+                # Group of operations bound to the same storage - execute as pipeline in single transaction
+                # Even single operation in group should go through storage.execute() to ensure transaction consistency
+                result = await self._execute_storage_group(group, result)
             else:
-                # All subsequent operations or operations that need previous_result
-                result = await self._execute_operation(op, previous_result=result)
+                # Single operation (not grouped) - execute normally
+                result = await self._execute_operation(group, previous_result=result)
 
         return result
 
@@ -156,20 +146,56 @@ class ExecutablePipelineExecutor:
 
         # Handle target-bound operations
         if isinstance(operation, TargetBoundOperation):
-            # Handle CreateOperation with callable data
-            if isinstance(operation.operation, CreateOperation) and previous_result is not None:
-                # Check if data contains callables that need to be called with previous_result
-                processed_data = []
+            # Handle CreateOperation - merge previous_result with data
+            if isinstance(operation.operation, CreateOperation):
+                # Handle S3 create result (tuples) - extract data only
+                if previous_result is not None:
+                    if isinstance(previous_result, list) and previous_result and isinstance(previous_result[0], tuple):
+                        # previous_result is list of tuples from S3 create - extract data
+                        previous_result_data = [item for item, _ in previous_result]
+                    else:
+                        previous_result_data = (
+                            previous_result if isinstance(previous_result, list) else [previous_result]
+                        )
+                else:
+                    previous_result_data = []
+
+                # Process callables in operation.data
+                processed_operation_data = []
                 for item in operation.operation.data:
                     if callable(item):
-                        # Call the function with previous_result
-                        processed_data.append(item(previous_result))
+                        # Call the function with previous_result (if available)
+                        if previous_result is not None:
+                            processed_operation_data.append(item(previous_result))
+                        else:
+                            # Callable without previous_result - just add it
+                            processed_operation_data.append(item)
                     else:
-                        processed_data.append(item)
+                        processed_operation_data.append(item)
 
-                # If no data was provided or all were callables, use previous_result
-                if not processed_data and previous_result is not None:
-                    processed_data = previous_result if isinstance(previous_result, list) else [previous_result]
+                # Merge: previous_result (if any) + operation.data
+                # If operation.data is empty and previous_result exists, use previous_result
+                # If operation.data is not empty and previous_result exists, prepend previous_result
+                # Note: Empty list is still a valid result (it means "create nothing")
+                if len(processed_operation_data) == 0 and len(previous_result_data) > 0:
+                    # Empty data, use previous_result
+                    processed_data = previous_result_data
+                elif len(processed_operation_data) > 0 and len(previous_result_data) > 0:
+                    # Both exist, prepend previous_result to data
+                    processed_data = previous_result_data + processed_operation_data
+                elif len(processed_operation_data) > 0:
+                    # Only data exists
+                    processed_data = processed_operation_data
+                elif len(previous_result_data) > 0:
+                    # Only previous_result exists
+                    processed_data = previous_result_data
+                elif len(processed_operation_data) == 0 and len(previous_result_data) == 0:
+                    # Both are empty - this is OK, it means "create nothing" (no-op)
+                    processed_data = []
+                else:
+                    # This should never happen, but just in case
+                    msg = "CreateOperation requires either data or previous_result"
+                    raise ValueError(msg)
 
                 wrapped_op = CreateOp(data=processed_data)
                 return await operation.target.execute(wrapped_op)
@@ -192,21 +218,48 @@ class ExecutablePipelineExecutor:
             # Execute source operation in source target
             source_result = await operation.source_target.execute(operation.source_result)
 
-            # Prepare data for target
-            # For CreateOperation, we need to handle the data properly
+            # Handle CreateOperation - merge source_result with data
             if isinstance(operation.next_operation, CreateOperation):
-                # Check if data contains callables that need to be called with source_result
-                processed_data = []
+                # Handle S3 create result (tuples) - extract data only
+                if source_result is not None:
+                    if isinstance(source_result, list) and source_result and isinstance(source_result[0], tuple):
+                        # source_result is list of tuples from S3 create - extract data
+                        source_result_data = [item for item, _ in source_result]
+                    else:
+                        source_result_data = source_result if isinstance(source_result, list) else [source_result]
+                else:
+                    source_result_data = []
+
+                # Process callables in operation.next_operation.data
+                processed_operation_data = []
                 for item in operation.next_operation.data:
                     if callable(item):
-                        # Call the function with source_result
-                        processed_data.append(item(source_result))
+                        # Call the function with source_result (if available)
+                        if source_result is not None:
+                            processed_operation_data.append(item(source_result))
+                        else:
+                            # Callable without source_result - just add it
+                            processed_operation_data.append(item)
                     else:
-                        processed_data.append(item)
+                        processed_operation_data.append(item)
 
-                # If no data was provided or all were callables, use source_result
-                if not processed_data and source_result is not None:
-                    processed_data = source_result if isinstance(source_result, list) else [source_result]
+                # Merge: source_result (if any) + operation.data
+                if not processed_operation_data and source_result_data:
+                    # Empty data, use source_result
+                    processed_data = source_result_data
+                elif processed_operation_data and source_result_data:
+                    # Both exist, prepend source_result to data
+                    processed_data = source_result_data + processed_operation_data
+                elif processed_operation_data:
+                    # Only data exists
+                    processed_data = processed_operation_data
+                elif source_result_data:
+                    # Only source_result exists
+                    processed_data = source_result_data
+                else:
+                    # Neither exists - error
+                    msg = "CreateOperation requires either data or previous_result"
+                    raise ValueError(msg)
 
                 wrapped_op = CreateOp(data=processed_data)
                 return await operation.target_target.execute(wrapped_op)
@@ -230,9 +283,274 @@ class ExecutablePipelineExecutor:
                 raise ValueError(msg)
             return await self._execute_python_operation(operation, previous_result)
 
+        # Handle CreateOperation without target - pass through data
+        # CreateOperation can work without target if it has previous_result or data
+        # It will just pass data through the pipeline without saving
+        if isinstance(operation, CreateOperation):
+            # If CreateOperation has previous_result or data, it can work without target
+            # It will just pass data through the pipeline
+            if previous_result is not None or len(operation.data) > 0:
+                # Merge previous_result with data (same logic as in TargetBoundOperation)
+                if previous_result is not None:
+                    if isinstance(previous_result, list) and previous_result and isinstance(previous_result[0], tuple):
+                        # previous_result is list of tuples from S3 create - extract data
+                        previous_result_data = [item for item, _ in previous_result]
+                    else:
+                        previous_result_data = (
+                            previous_result if isinstance(previous_result, list) else [previous_result]
+                        )
+                else:
+                    previous_result_data = []
+
+                # Process callables in operation.data
+                processed_operation_data = []
+                for item in operation.data:
+                    if callable(item):
+                        # Call the function with previous_result (if available)
+                        if previous_result is not None:
+                            processed_operation_data.append(item(previous_result))
+                        else:
+                            # Callable without previous_result - just add it
+                            processed_operation_data.append(item)
+                    else:
+                        processed_operation_data.append(item)
+
+                # Merge data
+                if not processed_operation_data and previous_result_data:
+                    # Empty data, use previous_result
+                    return previous_result_data
+                if processed_operation_data and previous_result_data:
+                    # Both exist, prepend previous_result to data
+                    return previous_result_data + processed_operation_data
+                if processed_operation_data:
+                    # Only data exists
+                    return processed_operation_data
+                if previous_result_data:
+                    # Only previous_result exists
+                    return previous_result_data
+                # Neither exists - error
+                msg = "CreateOperation requires either data or previous_result"
+                raise ValueError(msg)
+            # If no data and no previous_result, fall through to error below
+
         # For operations that don't need previous_result, we can't execute them without storage
         msg = f"Operation {type(operation).__name__} requires storage context but is not bound to any storage"
         raise ValueError(msg)
+
+    def _group_operations_by_storage(
+        self,
+        operations: list[Operation[Any, Any] | TargetBoundOperation[Any] | TargetSwitch[Any, Any]],
+    ) -> list[
+        Operation[Any, Any] | TargetBoundOperation[Any] | TargetSwitch[Any, Any] | list[TargetBoundOperation[Any]]
+    ]:
+        """Group consecutive operations bound to the same storage.
+
+        Operations bound to the same storage are grouped together so they can be
+        executed in a single transaction. Operations that need previous_result
+        (filter, map, reduce, transform) are not grouped as they execute in Python.
+
+        Args:
+            operations: List of operations to group.
+
+        Returns:
+            List of operations or groups of operations.
+
+        """
+        grouped: list[
+            Operation[Any, Any] | TargetBoundOperation[Any] | TargetSwitch[Any, Any] | list[TargetBoundOperation[Any]]
+        ] = []
+        current_group: list[TargetBoundOperation[Any]] | None = None
+        current_storage: Any = None
+
+        for op in operations:
+            # Check if operation is bound to a storage
+            if isinstance(op, TargetBoundOperation):
+                # Check if operation needs previous_result (filter, map, reduce, transform)
+                # These execute in Python and cannot be grouped with storage operations
+                if isinstance(op.operation, Operation) and self._operation_needs_previous_result(op.operation):
+                    # End current group if exists
+                    if current_group is not None:
+                        grouped.append(current_group)
+                        current_group = None
+                        current_storage = None
+                    # Add operation as-is (executes in Python)
+                    grouped.append(op)
+                    continue
+
+                # Check if operation is bound to the same storage as current group
+                if current_group is not None and op.target == current_storage:
+                    # Add to current group
+                    current_group.append(op)
+                else:
+                    # End current group if exists
+                    if current_group is not None:
+                        grouped.append(current_group)
+                    # Start new group
+                    current_group = [op]
+                    current_storage = op.target
+            elif isinstance(op, TargetSwitch):
+                # TargetSwitch breaks grouping - end current group
+                if current_group is not None:
+                    grouped.append(current_group)
+                    current_group = None
+                    current_storage = None
+                # Add TargetSwitch as-is
+                grouped.append(op)
+            else:
+                # Regular operation (not bound to storage) - end current group
+                if current_group is not None:
+                    grouped.append(current_group)
+                    current_group = None
+                    current_storage = None
+                # Add operation as-is
+                grouped.append(op)
+
+        # End final group if exists
+        if current_group is not None:
+            grouped.append(current_group)
+
+        return grouped
+
+    async def _execute_storage_group(
+        self,
+        group: list[TargetBoundOperation[Any]],
+        previous_result: Any,
+    ) -> Any:
+        """Execute a group of operations bound to the same storage in a single transaction.
+
+        This ensures all operations execute in a single transaction by creating
+        one transaction and reusing it for all operations in the group.
+
+        Args:
+            group: List of TargetBoundOperation bound to the same storage.
+            previous_result: Result from previous operation.
+
+        Returns:
+            Result of executing the group.
+
+        """
+        if not group:
+            return previous_result
+
+        # Get storage from first operation (all should have the same storage)
+        storage = group[0].target
+
+        # Check if storage supports execute_with_transaction (SQLAlchemyStorage)
+        # For other storages (S3, etc.), use regular execute() which handles transactions internally
+        from haolib.storages.sqlalchemy import SQLAlchemyStorage  # noqa: PLC0415
+
+        if isinstance(storage, SQLAlchemyStorage):
+            # Use single transaction for all operations in group
+            txn = storage._begin_transaction()
+            async with txn:
+                result = previous_result
+                for bound_op in group:
+                    # Handle CreateOperation with previous_result
+                    operation: Operation[Any, Any] | Pipeline[Any, Any, Any]
+                    if isinstance(bound_op.operation, CreateOperation):
+                        # Merge previous_result with data (same logic as in _execute_operation)
+                        if result is not None:
+                            if isinstance(result, list) and result and isinstance(result[0], tuple):
+                                previous_result_data = [item for item, _ in result]
+                            else:
+                                previous_result_data = result if isinstance(result, list) else [result]
+                        else:
+                            previous_result_data = []
+
+                        processed_operation_data = []
+                        for item in bound_op.operation.data:
+                            if callable(item):
+                                if result is not None:
+                                    processed_operation_data.append(item(result))
+                                else:
+                                    processed_operation_data.append(item)
+                            else:
+                                processed_operation_data.append(item)
+
+                        if len(processed_operation_data) == 0 and len(previous_result_data) > 0:
+                            processed_data = previous_result_data
+                        elif len(processed_operation_data) > 0 and len(previous_result_data) > 0:
+                            processed_data = previous_result_data + processed_operation_data
+                        elif len(processed_operation_data) > 0:
+                            processed_data = processed_operation_data
+                        elif len(previous_result_data) > 0:
+                            processed_data = previous_result_data
+                        else:
+                            processed_data = []
+
+                        operation = CreateOp(data=processed_data)
+                    else:
+                        operation = bound_op.operation
+
+                    # Execute operation with shared transaction
+                    result = await storage.execute_with_transaction(operation, txn)
+
+                return result
+        else:
+            # For non-transactional storages (S3, etc.), build pipeline and execute normally
+            # This maintains backward compatibility
+            first_op = group[0]
+            if isinstance(first_op.operation, Pipeline):
+                msg = "Pipeline inside TargetBoundOperation should not be grouped"
+                raise TypeError(msg)
+            first_operation: Operation[Any, Any] = first_op.operation
+
+            # Handle CreateOperation with previous_result
+            if isinstance(first_operation, CreateOperation):
+                # Merge previous_result with data (same logic as in _execute_operation)
+                if previous_result is not None:
+                    if isinstance(previous_result, list) and previous_result and isinstance(previous_result[0], tuple):
+                        previous_result_data = [item for item, _ in previous_result]
+                    else:
+                        previous_result_data = (
+                            previous_result if isinstance(previous_result, list) else [previous_result]
+                        )
+                else:
+                    previous_result_data = []
+
+                processed_operation_data = []
+                for item in first_operation.data:
+                    if callable(item):
+                        if previous_result is not None:
+                            processed_operation_data.append(item(previous_result))
+                        else:
+                            processed_operation_data.append(item)
+                    else:
+                        processed_operation_data.append(item)
+
+                if len(processed_operation_data) == 0 and len(previous_result_data) > 0:
+                    processed_data = previous_result_data
+                elif len(processed_operation_data) > 0 and len(previous_result_data) > 0:
+                    processed_data = previous_result_data + processed_operation_data
+                elif len(processed_operation_data) > 0:
+                    processed_data = processed_operation_data
+                elif len(previous_result_data) > 0:
+                    processed_data = previous_result_data
+                else:
+                    processed_data = []
+
+                first_operation = CreateOp(data=processed_data)
+
+            # Build pipeline from all operations
+            if len(group) == 1:
+                # Single operation - execute directly
+                return await storage.execute(first_operation)
+
+            # Multiple operations - build pipeline
+            current_pipeline: Pipeline[Any, Any, Any] = Pipeline(
+                first=first_operation,
+                second=group[1].operation,
+            )
+
+            # Extend pipeline with remaining operations
+            for op in group[2:]:
+                current_pipeline = Pipeline(
+                    first=current_pipeline,
+                    second=op.operation,
+                )
+
+            # Execute pipeline through storage (all in single transaction)
+            return await storage.execute(current_pipeline)
 
     def _operation_needs_previous_result(self, operation: Operation[Any, Any]) -> bool:
         """Check if operation needs previous result.

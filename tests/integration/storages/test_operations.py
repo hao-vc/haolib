@@ -133,11 +133,13 @@ class TestOperationsHandler:
             await handler.execute_create(create_op, txn)
 
         # Read all users
-        index = ParamIndex(data_type=User, index_name="all_users")
+        index = ParamIndex(data_type=User)
         read_op = ReadOperation(search_index=index)
 
-        async with txn:
-            results = [user async for user in handler.execute_read(read_op, txn)]
+        # Create new transaction for read
+        txn2 = sqlalchemy_storage._begin_transaction()
+        async with txn2:
+            results = [user async for user in handler.execute_read(read_op, txn2)]
 
         assert len(results) >= MIN_USERS_COUNT
         # Check that we got our users
@@ -164,7 +166,7 @@ class TestOperationsHandler:
         user_id = created[0].id
 
         # Update user
-        index = ParamIndex(data_type=User, index_name="by_id", id=user_id)
+        index = ParamIndex(data_type=User, id=user_id)
         update_op = UpdateOperation(search_index=index, patch={"age": GRACE_UPDATED_AGE, "name": "Grace Updated"})
 
         txn = sqlalchemy_storage._begin_transaction()
@@ -200,7 +202,7 @@ class TestOperationsHandler:
             u.name = "Henry Updated"
             return u
 
-        index = ParamIndex(data_type=User, index_name="by_id", id=user_id)
+        index = ParamIndex(data_type=User, id=user_id)
         update_op = UpdateOperation(search_index=index, patch=update_user)
 
         txn = sqlalchemy_storage._begin_transaction()
@@ -230,19 +232,21 @@ class TestOperationsHandler:
         user_id = created[0].id
 
         # Delete user
-        index = ParamIndex(data_type=User, index_name="by_id", id=user_id)
+        index = ParamIndex(data_type=User, id=user_id)
         delete_op = DeleteOperation(search_index=index)
 
-        txn = sqlalchemy_storage._begin_transaction()
-        async with txn:
-            deleted_count = await handler.execute_delete(delete_op, txn)
+        txn2 = sqlalchemy_storage._begin_transaction()
+        async with txn2:
+            deleted_count = await handler.execute_delete(delete_op, txn2)
 
         assert deleted_count == SINGLE_USER_COUNT
 
         # Verify deleted
-        read_index = ParamIndex(data_type=User, index_name="by_id", id=user_id)
+        read_index = ParamIndex(data_type=User, id=user_id)
         read_op = ReadOperation(search_index=read_index)
-        results = [user async for user in handler.execute_read(read_op, txn)]
+        txn3 = sqlalchemy_storage._begin_transaction()
+        async with txn3:
+            results = [user async for user in handler.execute_read(read_op, txn3)]
         assert len(results) == 0
 
     @pytest.mark.asyncio
@@ -266,14 +270,17 @@ class TestOperationsHandler:
             await handler.execute_create(create_op, txn)
 
         # Filter users by age >= 30
-        index = ParamIndex(data_type=User, index_name="all_users")
+        index = ParamIndex(data_type=User)
         read_op = ReadOperation(search_index=index)
         txn2 = sqlalchemy_storage._begin_transaction()
         async with txn2:
             read_result = handler.execute_read(read_op, txn2)
+            # Collect async iterator inside transaction
+            users_list = [user async for user in read_result]
         filter_op: FilterOperation[User] = FilterOperation(predicate=lambda u: u.age >= FILTER_MIN_AGE)
-        async with txn2:
-            filtered = await handler.execute_filter(filter_op, txn2, read_result)
+        txn3 = sqlalchemy_storage._begin_transaction()
+        async with txn3:
+            filtered = await handler.execute_filter(filter_op, txn3, users_list)
 
         assert len(filtered) >= 1
         assert all(user.age >= FILTER_MIN_AGE for user in filtered)
@@ -298,14 +305,17 @@ class TestOperationsHandler:
             await handler.execute_create(create_op, txn)
 
         # Map users to their names
-        index = ParamIndex(data_type=User, index_name="all_users")
+        index = ParamIndex(data_type=User)
         read_op = ReadOperation(search_index=index)
         txn2 = sqlalchemy_storage._begin_transaction()
         async with txn2:
             read_result = handler.execute_read(read_op, txn2)
+            # Collect async iterator inside transaction
+            users_list = [user async for user in read_result]
         map_op: MapOperation[User, str] = MapOperation(mapper=lambda user, _idx: user.name)
-        async with txn2:
-            mapped = await handler.execute_map(map_op, txn2, read_result)
+        txn3 = sqlalchemy_storage._begin_transaction()
+        async with txn3:
+            mapped = await handler.execute_map(map_op, txn3, users_list)
 
         assert len(mapped) >= MIN_USERS_COUNT
         assert "Mary" in mapped
@@ -333,17 +343,20 @@ class TestOperationsHandler:
             await handler.execute_create(create_op, txn)
 
         # Reduce to sum of ages
-        index = ParamIndex(data_type=User, index_name="all_users")
+        index = ParamIndex(data_type=User)
         read_op = ReadOperation(search_index=index)
         txn2 = sqlalchemy_storage._begin_transaction()
         async with txn2:
             read_result = handler.execute_read(read_op, txn2)
+            # Collect async iterator inside transaction
+            users_list = [user async for user in read_result]
         reduce_op: ReduceOperation[User, int] = ReduceOperation(
             reducer=lambda acc, user: acc + user.age,
             initial=0,
         )
-        async with txn2:
-            total_age = await handler.execute_reduce(reduce_op, txn2, read_result)
+        txn3 = sqlalchemy_storage._begin_transaction()
+        async with txn3:
+            total_age = await handler.execute_reduce(reduce_op, txn3, users_list)
 
         assert total_age >= EXPECTED_TOTAL_AGE
 
@@ -367,19 +380,20 @@ class TestOperationsHandler:
             await handler.execute_create(create_op, txn)
 
         # Transform to list of emails
-        index = ParamIndex(data_type=User, index_name="all_users")
+        index = ParamIndex(data_type=User)
         read_op = ReadOperation(search_index=index)
         txn2 = sqlalchemy_storage._begin_transaction()
         async with txn2:
             read_result = handler.execute_read(read_op, txn2)
-        # Collect async iterator first
-        users_list = [user async for user in read_result]
+            # Collect async iterator inside transaction
+            users_list = [user async for user in read_result]
 
         transform_op: TransformOperation[list[User], list[str]] = TransformOperation(
             transformer=lambda users: [u.email for u in users]
         )
-        async with txn2:
-            emails = await handler.execute_transform(transform_op, txn2, users_list)
+        txn3 = sqlalchemy_storage._begin_transaction()
+        async with txn3:
+            emails = await handler.execute_transform(transform_op, txn3, users_list)
 
         assert len(emails) >= MIN_USERS_COUNT
         assert "rachel@example.com" in emails
@@ -416,10 +430,11 @@ class TestStorageOperations:
         await sqlalchemy_storage.execute(createo(users))
 
         # Read all users
-        index = ParamIndex(data_type=User, index_name="all_users")
+        index = ParamIndex(data_type=User)
         read_result = await sqlalchemy_storage.execute(reado(search_index=index))
 
-        results = [user async for user in read_result]
+        # read_result is now a list (collected inside transaction)
+        results = read_result
 
         assert len(results) >= MIN_USERS_COUNT
         emails = {user.email for user in results}
@@ -435,7 +450,7 @@ class TestStorageOperations:
         user_id = created[0].id
 
         # Update user
-        index = ParamIndex(data_type=User, index_name="by_id", id=user_id)
+        index = ParamIndex(data_type=User, id=user_id)
         updated = await sqlalchemy_storage.execute(
             updateo(search_index=index, patch={"age": GRACE_UPDATED_AGE, "name": "Eve Updated"}),
         )
@@ -453,7 +468,7 @@ class TestStorageOperations:
         user_id = created[0].id
 
         # Delete user
-        index = ParamIndex(data_type=User, index_name="by_id", id=user_id)
+        index = ParamIndex(data_type=User, id=user_id)
         deleted_count = await sqlalchemy_storage.execute(deleteo(search_index=index))
 
         assert deleted_count == SINGLE_USER_COUNT
@@ -470,7 +485,7 @@ class TestStorageOperations:
         await sqlalchemy_storage.execute(createo(users))
 
         # Pipeline: read -> filter -> map (all in single transaction)
-        index = ParamIndex(data_type=User, index_name="all_users")
+        index = ParamIndex(data_type=User)
         pipeline: Pipeline[Any, Any, Any] = (
             reado(search_index=index) | filtero(lambda u: u.age >= FILTER_MIN_AGE) | mapo(lambda u, _idx: u.name)
         )
@@ -506,7 +521,7 @@ class TestStorageOperations:
         await sqlalchemy_storage.execute(createo(users))
 
         # Reduce to sum of ages
-        index = ParamIndex(data_type=User, index_name="all_users")
+        index = ParamIndex(data_type=User)
         pipeline = reado(search_index=index) | reduceo(
             reducer=lambda acc, user: acc + user.age,
             initial=0,
@@ -528,7 +543,7 @@ class TestStorageOperations:
 
         # Transform to list of emails
         # Pipeline: read -> transform (transform needs previous result from pipeline)
-        index = ParamIndex(data_type=User, index_name="all_users")
+        index = ParamIndex(data_type=User)
         pipeline = reado(search_index=index) | transformo(transformer=lambda users: [u.email for u in users])
         emails = await sqlalchemy_storage.execute(pipeline)
 

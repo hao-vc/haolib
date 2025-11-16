@@ -16,15 +16,12 @@ class SearchIndex[T_Data](Protocol):
         ```python
         # SQL index
         index = SQLQueryIndex(
-            data_type=User,
-            index_name="by_email",
             query=select(UserModel).where(UserModel.email == "john@example.com")
         )
 
         # Path index for S3
         index = PathIndex(
             data_type=Document,
-            index_name="by_path",
             path="documents/{category}/{filename}"
         )
         ```
@@ -37,16 +34,6 @@ class SearchIndex[T_Data](Protocol):
 
         Returns:
             Type of data.
-
-        """
-        ...
-
-    @property
-    def index_name(self) -> str:
-        """Name of the index for identification.
-
-        Returns:
-            Index name.
 
         """
         ...

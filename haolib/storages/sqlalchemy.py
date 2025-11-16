@@ -527,4 +527,43 @@ class SQLAlchemyStorage(AbstractStorage):
         # Automatically create transaction for each operation/pipeline
         txn = self._begin_transaction()
         async with txn:
-            return await self._executor.execute(operation, txn)
+            result = await self._executor.execute(operation, txn)
+            # If result is AsyncIterator and we're in a pipeline context,
+            # we need to collect it inside the transaction
+            # But for standalone ReadOperation, we return AsyncIterator as-is
+            # The caller is responsible for consuming it within transaction context
+            # For pipelines, ExecutablePipelineExecutor will handle collection
+            if isinstance(result, AsyncIterator):
+                # Collect async iterator to avoid transaction closure issues
+                # This ensures all data is loaded before transaction closes
+                return [item async for item in result]  # type: ignore[return-value]
+            return result
+
+    async def execute_with_transaction[T_Result](
+        self,
+        operation: Operation[Any, T_Result] | Pipeline[Any, Any, T_Result],
+        transaction: SQLAlchemyStorageTransaction,
+    ) -> T_Result:
+        """Execute operation or pipeline with existing transaction.
+
+        This method allows executing operations within an existing transaction,
+        enabling multiple operations to share the same transaction context.
+        Used internally by ExecutablePipelineExecutor to group operations.
+
+        Args:
+            operation: Operation or pipeline to execute.
+            transaction: Existing transaction to use.
+
+        Returns:
+            Result of execution.
+
+        Raises:
+            RuntimeError: If storage operation fails.
+            TypeError: If operation type is not supported.
+
+        """
+        result = await self._executor.execute(operation, transaction)
+        # Handle AsyncIterator same way as execute()
+        if isinstance(result, AsyncIterator):
+            return [item async for item in result]  # type: ignore[return-value]
+        return result

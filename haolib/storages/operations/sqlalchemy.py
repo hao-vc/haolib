@@ -29,6 +29,7 @@ from haolib.storages.events.operations import (
     BeforeTransformEvent,
     BeforeUpdateEvent,
 )
+from haolib.storages.indexes.sql import SQLQueryIndex
 from haolib.storages.indexes.sqlalchemy import IndexHandler
 from haolib.storages.operations.concrete import (
     CreateOperation,
@@ -212,9 +213,15 @@ class SQLAlchemyOperationsHandler:
         query = await self._index_handler.build_query(operation.search_index, session)
 
         # Get storage model type from registry
-        registration = self._registry.get_for_user_type(operation.search_index.data_type)
+        # For SQLQueryIndex, extract data_type from query
+        if isinstance(operation.search_index, SQLQueryIndex):
+            data_type = self._index_handler.get_data_type_from_query(query)
+        else:
+            data_type = operation.search_index.data_type
+
+        registration = self._registry.get_for_user_type(data_type)
         if not registration:
-            msg = f"No storage model registered for {operation.search_index.data_type}"
+            msg = f"No storage model registered for {data_type}"
             raise ValueError(msg)
 
         model = registration.storage_type
@@ -392,9 +399,15 @@ class SQLAlchemyOperationsHandler:
         query = await self._index_handler.build_query(operation.search_index, session)
 
         # Get storage model type from registry
-        registration = self._registry.get_for_user_type(operation.search_index.data_type)
+        # For SQLQueryIndex, extract data_type from query
+        if isinstance(operation.search_index, SQLQueryIndex):
+            data_type = self._index_handler.get_data_type_from_query(query)
+        else:
+            data_type = operation.search_index.data_type
+
+        registration = self._registry.get_for_user_type(data_type)
         if not registration:
-            msg = f"No storage model registered for {operation.search_index.data_type}"
+            msg = f"No storage model registered for {data_type}"
             raise ValueError(msg)
 
         model = registration.storage_type

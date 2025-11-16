@@ -1,8 +1,8 @@
 """S3 storage implementation."""
 
-from collections.abc import AsyncIterator, Callable
+from collections.abc import Callable
 from types import TracebackType
-from typing import TYPE_CHECKING, Any, Self
+from typing import Any, Self
 
 from haolib.components.events import EventEmitter
 from haolib.components.plugins.helpers import apply_preset
@@ -186,11 +186,17 @@ class S3Storage(AbstractStorage):
                 data_type_registry=registry
             )
 
-            # Create
-            await storage.execute(createo([user1, user2]))
+            # Create - returns list of tuples (data, path)
+            result = await storage.execute(createo([user1, user2]))
+            for data, path in result:
+                print(f"Saved {data} to {path}")
+            # Output:
+            # Saved User(name='Alice') to User/123e4567-e89b-12d3-a456-426614174000.json
+            # Saved User(name='Bob') to User/123e4567-e89b-12d3-a456-426614174001.json
 
-            # Read
-            index = PathIndex(data_type=User, index_name="user1", path="User/user1.json")
+            # Read using path from create result
+            _, path = result[0]
+            index = PathIndex(data_type=User, path=path)
             async for user in await storage.execute(reado(search_index=index)):
                 print(user)
             ```

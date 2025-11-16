@@ -1,6 +1,6 @@
 """Unit tests for SQLAlchemyStorageTransaction."""
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 from sqlalchemy.exc import SQLAlchemyError

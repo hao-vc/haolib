@@ -12,7 +12,7 @@ from haolib.database.files.s3.clients.abstract import (
     S3BucketAlreadyOwnedByYouClientException,
 )
 from haolib.storages.data_types.registry import DataTypeRegistry
-from haolib.storages.dsl import createo, reado, reduceo, transformo
+from haolib.storages.dsl import createo, filtero, mapo, reado, reduceo, transformo
 from haolib.storages.indexes.params import ParamIndex
 from haolib.storages.s3 import S3Storage
 from haolib.storages.sqlalchemy import SQLAlchemyStorage
@@ -82,18 +82,20 @@ class TestExecutablePipeline:
         # Both operators have same precedence (10), so they execute left-to-right
         pipeline = (
             reado(search_index=ParamIndex(User)) ^ sql_storage  # Read all users
-            | reduceo(lambda acc, u: acc + u.age, 0) ^ sql_storage
+            | reduceo(lambda acc, u: acc + u.age, 0)
             | transformo(lambda total: str(total).encode())
-            | createo([lambda data: data]) ^ s3_storage
+            | createo() ^ s3_storage  # Uses previous_result
         )
 
         # Execute pipeline
         result = await pipeline.execute()
 
-        # Result should be list of created items
+        # Result should be list of tuples (data, path) from S3 create
         assert isinstance(result, list)
         assert len(result) == 1
-        assert result[0] == str(ALICE_AGE + BOB_AGE).encode()
+        data, path = result[0]
+        assert data == str(ALICE_AGE + BOB_AGE).encode()
+        assert path.startswith("bytes/")
 
     @pytest.mark.asyncio
     async def test_pipeline_with_multiple_storage_switches(
@@ -114,16 +116,89 @@ class TestExecutablePipeline:
         # Both operators have same precedence (10), so they execute left-to-right
         pipeline = (
             reado(search_index=ParamIndex(User)) ^ sql_storage
-            | reduceo(lambda acc, u: acc + u.age, 0) ^ sql_storage
+            | reduceo(lambda acc, u: acc + u.age, 0)
             | transformo(lambda total: str(total).encode())
-            | createo([lambda data: data]) ^ s3_storage
+            | createo() ^ s3_storage  # Uses previous_result
         )
 
         # Execute pipeline
         result = await pipeline.execute()
 
-        # Result should be list of created items (from createo)
+        # Result should be list of tuples (data, path) from S3 create
         assert isinstance(result, list)
         assert len(result) == 1
-        # The result is bytes from createo, so we decode and check
-        assert result[0] == str(ALICE_AGE + BOB_AGE).encode()
+        # The result is tuple (bytes, path) from createo
+        data, path = result[0]
+        assert data == str(ALICE_AGE + BOB_AGE).encode()
+        assert path.startswith("bytes/")
+
+    @pytest.mark.asyncio
+    async def test_pipeline_create_with_merged_data(
+        self,
+        sql_storage: SQLAlchemyStorage,
+        s3_storage: S3Storage,
+    ) -> None:
+        """Test pipeline where createo merges previous_result with additional data."""
+        # Create users in SQL
+        users = [
+            User(name="Alice", age=ALICE_AGE, email="alice@example.com"),
+            User(name="Bob", age=BOB_AGE, email="bob@example.com"),
+        ]
+        await sql_storage.execute(createo(users))
+
+        # Create pipeline: SQL -> filter -> create with additional data
+        # previous_result (filtered users) should be prepended to [extra_user]
+        extra_user = User(name="Charlie", age=40, email="charlie@example.com")
+        pipeline = (
+            reado(search_index=ParamIndex(User)) ^ sql_storage
+            | filtero(lambda u: u.age >= 30)
+            | createo([extra_user]) ^ s3_storage  # previous_result + [extra_user]
+        )
+
+        # Execute pipeline
+        result = await pipeline.execute()
+
+        # Result should contain both filtered users (Bob) and extra_user
+        assert isinstance(result, list)
+        assert len(result) == 2  # Bob (from filter) + Charlie (from createo)
+        # Check that both users are in result
+        user_data = [item for item, _ in result]
+        names = [u.name for u in user_data if isinstance(u, User)]
+        assert "Bob" in names
+        assert "Charlie" in names
+
+    @pytest.mark.asyncio
+    async def test_pipeline_s3_create_result_passed_to_next_operation(
+        self,
+        sql_storage: SQLAlchemyStorage,
+        s3_storage: S3Storage,
+    ) -> None:
+        """Test that result from S3 create is correctly passed to next operation."""
+        # Create users in SQL
+        users = [
+            User(name="Alice", age=ALICE_AGE, email="alice@example.com"),
+            User(name="Bob", age=BOB_AGE, email="bob@example.com"),
+        ]
+        await sql_storage.execute(createo(users))
+
+        # Create pipeline: SQL -> filter -> map -> create in S3 -> transform
+        # transformo should receive data from S3 create, not tuples
+        pipeline = (
+            reado(search_index=ParamIndex(User)) ^ sql_storage
+            | filtero(lambda u: u.age >= 30)
+            | mapo(lambda u, _idx: u.name)
+            | createo() ^ s3_storage  # Returns tuples (data, path)
+            | transformo(lambda data: data)  # Should receive data, not tuples
+        )
+
+        # Execute pipeline
+        result = await pipeline.execute()
+
+        # Result should be tuples (data, path) from S3 create, passed through transformo
+        assert isinstance(result, list)
+        assert len(result) == 1  # Only Bob (age >= 30)
+        # transformo receives tuples and passes them through
+        assert isinstance(result[0], tuple)
+        data, path = result[0]
+        assert data == "Bob"  # Name from mapo
+        assert path.startswith("str/")  # Path from S3 create (data type is str)

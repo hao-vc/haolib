@@ -78,7 +78,7 @@ class TestUpdateWithRelationships:
         user_id = created[0].id
 
         # Update user - should load relationships (if any)
-        index = ParamIndex(data_type=User, index_name="by_id", id=user_id)
+        index = ParamIndex(data_type=User, id=user_id)
         update_op = UpdateOperation(search_index=index, patch={"name": "UpdatedUser"})
 
         txn = sqlalchemy_storage._begin_transaction()
@@ -125,7 +125,7 @@ class TestUpdateWithRelationships:
         user_id = created[0].id
 
         # Update user - should load nested relationships
-        index = ParamIndex(data_type=User, index_name="by_id", id=user_id)
+        index = ParamIndex(data_type=User, id=user_id)
         update_op = UpdateOperation(search_index=index, patch={"name": "UpdatedUser"})
 
         txn = sqlalchemy_storage._begin_transaction()
@@ -158,7 +158,7 @@ class TestUpdateWithRelationships:
         user_id = created[0].id
 
         # Update user - error handling for relationships should work
-        index = ParamIndex(data_type=User, index_name="by_id", id=user_id)
+        index = ParamIndex(data_type=User, id=user_id)
         update_op = UpdateOperation(search_index=index, patch={"name": "UpdatedUser"})
 
         # Should handle AttributeError/KeyError gracefully
@@ -238,7 +238,7 @@ class TestRelationshipsCoverage:
         # Update user - should load relationships at depth 1
         # UserModel has no relationships, so the code will try to load them but find none
         # This tests the relationship loading code path
-        index = ParamIndex(data_type=User, index_name="by_id", id=user_id)
+        index = ParamIndex(data_type=User, id=user_id)
         update_op = UpdateOperation(search_index=index, patch={"name": "RelUser1Updated"})
 
         txn = real_sqlalchemy_storage._begin_transaction()
@@ -267,7 +267,7 @@ class TestRelationshipsCoverage:
         # Update user - should try to load nested relationships
         # UserModel has no relationships, so AttributeError/KeyError will be caught
         # This tests the error handling path (lines 277-279)
-        index = ParamIndex(data_type=User, index_name="by_id", id=user_id)
+        index = ParamIndex(data_type=User, id=user_id)
         update_op = UpdateOperation(search_index=index, patch={"name": "RelUser2Updated"})
 
         txn = real_sqlalchemy_storage._begin_transaction()
@@ -295,7 +295,7 @@ class TestRelationshipsCoverage:
 
         # Update user - error handling for relationships should work
         # UserModel has no relationships, so AttributeError/KeyError should be caught
-        index = ParamIndex(data_type=User, index_name="by_id", id=user_id)
+        index = ParamIndex(data_type=User, id=user_id)
         update_op = UpdateOperation(search_index=index, patch={"name": "RelUser3Updated"})
 
         # Should handle AttributeError/KeyError gracefully

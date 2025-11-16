@@ -28,7 +28,10 @@ Example:
 """
 
 from collections.abc import Callable, Iterable
-from typing import Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar, overload
+
+if TYPE_CHECKING:
+    from typing import cast
 
 from haolib.storages.dsl.patch import normalize_patch
 from haolib.storages.indexes.abstract import SearchIndex
@@ -46,23 +49,40 @@ from haolib.storages.operations.concrete import (
 T_Data = TypeVar("T_Data")
 
 
-def createo(data: Iterable[Any]) -> CreateOperation[Any]:
+def createo(
+    data: Iterable[Any] | None = None,
+) -> CreateOperation[Any]:
     """Create data in storage.
 
     Args:
-        data: Data to create. Can be any iterable (list, tuple, etc.).
+        data: Optional data to create. If not provided and operation is in pipeline,
+              previous_result will be used. If provided and operation is in pipeline,
+              previous_result will be prepended to data.
 
     Returns:
         CreateOperation for creating data.
 
     Example:
         ```python
+        # Create with explicit data
         users = [User(id=1, name="Alice"), User(id=2, name="Bob")]
         await storage.execute(createo(users))
+
+        # Create using previous_result from pipeline
+        pipeline = (
+            reado(search_index=ParamIndex(User)) ^ sql_storage
+            | createo() ^ s3_storage  # Uses previous_result
+        )
+
+        # Create with both previous_result and additional data
+        pipeline = (
+            reado(search_index=ParamIndex(User)) ^ sql_storage
+            | createo([extra_user]) ^ s3_storage  # previous_result + [extra_user]
+        )
         ```
 
     """
-    return CreateOperation(data=list(data) if not isinstance(data, list) else data)
+    return CreateOperation(data=list(data) if data is not None else [])
 
 
 def reado[T_Data](
@@ -205,7 +225,23 @@ def deleteo[T_Data](
     return DeleteOperation(search_index=search_index)
 
 
-def filtero(predicate: Callable[[Any], bool]) -> FilterOperation[Any]:
+# Put Any overload first so pyright uses it when type cannot be inferred
+# This ensures lambda parameters are typed as Any, not object
+@overload
+def filtero(
+    predicate: Callable[[Any], bool],  # pyright: ignore[reportInvalidTypeVarUse]
+) -> FilterOperation[Any]: ...
+
+
+@overload
+def filtero[T_Data](
+    predicate: Callable[[T_Data], bool],
+) -> FilterOperation[T_Data]: ...
+
+
+def filtero(
+    predicate: Callable[[Any], bool],
+) -> FilterOperation[Any]:
     """Filter data.
 
     Args:
@@ -223,6 +259,20 @@ def filtero(predicate: Callable[[Any], bool]) -> FilterOperation[Any]:
 
     """
     return FilterOperation(predicate=predicate)
+
+
+# Put Any overload first so pyright uses it when type cannot be inferred
+# This ensures lambda parameters are typed as Any, not object
+@overload
+def mapo(
+    mapper: Callable[[Any, int], Any],  # pyright: ignore[reportInvalidTypeVarUse]
+) -> MapOperation[Any, Any]: ...
+
+
+@overload
+def mapo[T_Data, T_Result](
+    mapper: Callable[[T_Data, int], T_Result],
+) -> MapOperation[T_Data, T_Result]: ...
 
 
 def mapo[T_Data, T_Result](
@@ -245,6 +295,22 @@ def mapo[T_Data, T_Result](
 
     """
     return MapOperation(mapper=mapper)
+
+
+# Put Any overload first so pyright uses it when type cannot be inferred
+# This ensures lambda parameters are typed as Any, not object
+@overload
+def reduceo(
+    reducer: Callable[[Any, Any], Any],  # pyright: ignore[reportInvalidTypeVarUse]
+    initial: Any,
+) -> ReduceOperation[Any, Any]: ...
+
+
+@overload
+def reduceo[T_Data, T_Result](
+    reducer: Callable[[T_Result, T_Data], T_Result],
+    initial: T_Result,
+) -> ReduceOperation[T_Data, T_Result]: ...
 
 
 def reduceo[T_Data, T_Result](
@@ -273,6 +339,20 @@ def reduceo[T_Data, T_Result](
 
     """
     return ReduceOperation(reducer=reducer, initial=initial)
+
+
+# Put Any overload first so pyright uses it when type cannot be inferred
+# This ensures lambda parameters are typed as Any, not object
+@overload
+def transformo(
+    transformer: Callable[[Any], Any],  # pyright: ignore[reportInvalidTypeVarUse]
+) -> TransformOperation[Any, Any]: ...
+
+
+@overload
+def transformo[T_Data, T_Result](
+    transformer: Callable[[T_Data], T_Result],
+) -> TransformOperation[T_Data, T_Result]: ...
 
 
 def transformo[T_Data, T_Result](

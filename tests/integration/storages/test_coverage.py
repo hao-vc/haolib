@@ -82,7 +82,7 @@ class TestCoverage:
         users = [User(name="PipelineUser", age=25, email="pipeline@example.com")]
         await real_sqlalchemy_storage.execute(createo(users))
 
-        index = ParamIndex(data_type=User, index_name="all_users")
+        index = ParamIndex(data_type=User)
         pipeline = reado(search_index=index) | filtero(lambda u: u.age >= MIN_AGE)
 
         result = await real_sqlalchemy_storage.execute(pipeline)
@@ -96,7 +96,7 @@ class TestCoverage:
         users = [User(name="NestedUser", age=30, email="nested@example.com")]
         await real_sqlalchemy_storage.execute(createo(users))
 
-        index = ParamIndex(data_type=User, index_name="all_users")
+        index = ParamIndex(data_type=User)
         inner_pipeline = reado(search_index=index) | filtero(lambda u: u.age >= MIN_AGE)
         outer_pipeline = inner_pipeline | mapo(lambda u, _idx: u.name)
 
@@ -111,7 +111,7 @@ class TestCoverage:
         users = [User(name="IteratorUser", age=25, email="iterator@example.com")]
         await real_sqlalchemy_storage.execute(createo(users))
 
-        index = ParamIndex(data_type=User, index_name="all_users")
+        index = ParamIndex(data_type=User)
         await real_sqlalchemy_storage.execute(reado(search_index=index))
 
         # This should trigger _collect_async_iterator when used in pipeline
@@ -127,7 +127,7 @@ class TestCoverage:
         users = [User(name="AsyncIterUser", age=25, email="asynciter@example.com")]
         await real_sqlalchemy_storage.execute(createo(users))
 
-        index = ParamIndex(data_type=User, index_name="all_users")
+        index = ParamIndex(data_type=User)
         read_result = await real_sqlalchemy_storage.execute(reado(search_index=index))
 
         # Filter with AsyncIterator - should trigger collection
@@ -152,10 +152,11 @@ class TestCoverage:
 
         assert isinstance(result, int)
 
-        # Transform with AsyncIterator - need to collect first
+        # Transform with list (AsyncIterator is now collected inside transaction)
         # Re-read for transform test
         read_result2 = await real_sqlalchemy_storage.execute(reado(search_index=index))
-        users_list = [u async for u in read_result2]
+        # read_result2 is now a list (collected inside transaction)
+        users_list = read_result2
         txn2 = real_sqlalchemy_storage._begin_transaction()
         async with txn2:
             transform_op = transformo(transformer=lambda users: [u.email for u in users])
@@ -171,11 +172,12 @@ class TestCoverage:
         users = [User(name="OptimizeUser", age=25, email="optimize@example.com")]
         await real_sqlalchemy_storage.execute(createo(users))
 
-        index = ParamIndex(data_type=User, index_name="all_users")
+        index = ParamIndex(data_type=User)
         # Single read operation - no filters, should not trigger optimized query building
         result = await real_sqlalchemy_storage.execute(reado(search_index=index))
 
-        assert hasattr(result, "__aiter__")
+        # Result is now a list (AsyncIterator is collected inside transaction)
+        assert isinstance(result, list)
 
     @pytest.mark.asyncio
     async def test_build_optimized_operation_single_operation(self, real_sqlalchemy_storage: Any) -> None:
@@ -183,11 +185,12 @@ class TestCoverage:
         users = [User(name="SingleOpUser", age=25, email="single@example.com")]
         await real_sqlalchemy_storage.execute(createo(users))
 
-        index = ParamIndex(data_type=User, index_name="all_users")
+        index = ParamIndex(data_type=User)
         # Single operation - len(sql_operations) == 1, should not trigger optimization
         result = await real_sqlalchemy_storage.execute(reado(search_index=index))
 
-        assert hasattr(result, "__aiter__")
+        # Result is now a list (AsyncIterator is collected inside transaction)
+        assert isinstance(result, list)
 
     @pytest.mark.asyncio
     async def test_build_optimized_operation_no_optimized_result(self, real_sqlalchemy_storage: Any) -> None:
@@ -195,7 +198,7 @@ class TestCoverage:
         users = [User(name="NoOptUser", age=25, email="noopt@example.com")]
         await real_sqlalchemy_storage.execute(createo(users))
 
-        index = ParamIndex(data_type=User, index_name="all_users")
+        index = ParamIndex(data_type=User)
 
         # Use a filter that cannot be converted to SQL
         def complex_predicate(u: User) -> bool:
@@ -256,7 +259,7 @@ class TestCoverage:
         try:
             # Now test update - should hit the else branch at line 284
             query = select(UserModel).where(UserModel.name == "test1")
-            index = SQLQueryIndex(data_type=User, index_name="by_name", query=query)
+            index = SQLQueryIndex(query=query)
             update_op = UpdateOperation(search_index=index, patch={"age": UPDATED_AGE})
 
             txn3 = real_sqlalchemy_storage._begin_transaction()
@@ -299,7 +302,7 @@ class TestCoverage:
         try:
             # Delete using SQLQueryIndex (no PK means we use count query path)
             query = select(UserModel).where(UserModel.name == "DeleteTest")
-            index = SQLQueryIndex(data_type=User, index_name="by_name", query=query)
+            index = SQLQueryIndex(query=query)
             delete_op = DeleteOperation(search_index=index)
 
             txn = real_sqlalchemy_storage._begin_transaction()
@@ -337,7 +340,7 @@ class TestCoverage:
         try:
             # Delete using SQLQueryIndex (no PK means we use count query path)
             query = select(UserModel).where(UserModel.name == "DeleteTest")
-            index = SQLQueryIndex(data_type=User, index_name="by_name", query=query)
+            index = SQLQueryIndex(query=query)
             delete_op = DeleteOperation(search_index=index)
 
             txn = real_sqlalchemy_storage._begin_transaction()
@@ -371,7 +374,7 @@ class TestCoverage:
         # is defensive code that's extremely difficult to test without code modification
 
         # Test normal operation - the else branch is defensive code
-        index = ParamIndex(data_type=User, index_name="by_id", id=user_id)
+        index = ParamIndex(data_type=User, id=user_id)
         update_op = UpdateOperation(search_index=index, patch={"name": "UpdatedUser"})
 
         txn = real_sqlalchemy_storage._begin_transaction()
@@ -418,7 +421,7 @@ class TestCoverage:
             return original_method(storage_type, user_type)
 
         with patch.object(handler._registry, "get_for_storage_type", side_effect=mock_get_storage):
-            index = ParamIndex(data_type=User, index_name="by_id", id=user_id)
+            index = ParamIndex(data_type=User, id=user_id)
             update_op = UpdateOperation(search_index=index, patch=update_func)
 
             txn3 = real_sqlalchemy_storage._begin_transaction()

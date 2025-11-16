@@ -26,71 +26,40 @@ class TestSQLQueryIndex:
     def test_init(self) -> None:
         """Test SQLQueryIndex initialization."""
         query = select(IndexTestModel)
-        index = SQLQueryIndex(
-            data_type=int,
-            index_name="test",
-            query=query,
-        )
-        assert index.data_type == int
-        assert index.index_name == "test"
+        index = SQLQueryIndex(query=query)
         assert index.query == query
 
     def test_repr(self) -> None:
         """Test SQLQueryIndex string representation."""
         query = select(IndexTestModel)
-        index = SQLQueryIndex(
-            data_type=int,
-            index_name="test",
-            query=query,
-        )
+        index = SQLQueryIndex(query=query)
         repr_str = repr(index)
         assert "SQLQueryIndex" in repr_str
-        assert "int" in repr_str
-        assert "test" in repr_str
+        assert "query" in repr_str.lower()
 
     def test_eq(self) -> None:
         """Test SQLQueryIndex equality."""
         query1 = select(IndexTestModel)
         query2 = select(IndexTestModel)
-        index1 = SQLQueryIndex(
-            data_type=int,
-            index_name="test",
-            query=query1,
-        )
-        index2 = SQLQueryIndex(
-            data_type=int,
-            index_name="test",
-            query=query2,
-        )
+        index1 = SQLQueryIndex(query=query1)
+        index2 = SQLQueryIndex(query=query2)
         # Queries are different objects, so indexes are not equal
         assert index1 != index2
 
         # Same query object
-        index3 = SQLQueryIndex(
-            data_type=int,
-            index_name="test",
-            query=query1,
-        )
+        index3 = SQLQueryIndex(query=query1)
         assert index1 == index3
 
     def test_eq_different_type(self) -> None:
         """Test SQLQueryIndex equality with different type."""
         query = select(IndexTestModel)
-        index = SQLQueryIndex(
-            data_type=int,
-            index_name="test",
-            query=query,
-        )
+        index = SQLQueryIndex(query=query)
         assert index != "not an index"
 
     def test_hash(self) -> None:
         """Test SQLQueryIndex hash."""
         query = select(IndexTestModel)
-        index = SQLQueryIndex(
-            data_type=int,
-            index_name="test",
-            query=query,
-        )
+        index = SQLQueryIndex(query=query)
         # Hash should work (uses id(query) which is stable)
         hash_val = hash(index)
         assert isinstance(hash_val, int)
@@ -98,16 +67,8 @@ class TestSQLQueryIndex:
     def test_eq_with_same_query_object(self) -> None:
         """Test SQLQueryIndex equality with same query object (line 90)."""
         query = select(IndexTestModel)
-        index1 = SQLQueryIndex(
-            data_type=int,
-            index_name="test",
-            query=query,
-        )
-        index2 = SQLQueryIndex(
-            data_type=int,
-            index_name="test",
-            query=query,
-        )
+        index1 = SQLQueryIndex(query=query)
+        index2 = SQLQueryIndex(query=query)
         # Same query object should make them equal
         assert index1 == index2
 
@@ -119,11 +80,10 @@ class TestVectorSearchIndex:
         """Test VectorSearchIndex initialization."""
         index = VectorSearchIndex(
             data_type=str,
-            index_name="test",
+            
             query_text="search",
         )
         assert index.data_type == str
-        assert index.index_name == "test"
         assert index.query_text == "search"
         assert index.limit == 10
         assert index.threshold == 0.7
@@ -132,7 +92,7 @@ class TestVectorSearchIndex:
         """Test VectorSearchIndex initialization with custom defaults."""
         index = VectorSearchIndex(
             data_type=str,
-            index_name="test",
+            
             query_text="search",
             limit=20,
             threshold=0.8,
@@ -144,25 +104,24 @@ class TestVectorSearchIndex:
         """Test VectorSearchIndex string representation."""
         index = VectorSearchIndex(
             data_type=str,
-            index_name="test",
+            
             query_text="search",
         )
         repr_str = repr(index)
         assert "VectorSearchIndex" in repr_str
         assert "str" in repr_str
-        assert "test" in repr_str
         assert "search" in repr_str
 
     def test_eq(self) -> None:
         """Test VectorSearchIndex equality."""
         index1 = VectorSearchIndex(
             data_type=str,
-            index_name="test",
+            
             query_text="search",
         )
         index2 = VectorSearchIndex(
             data_type=str,
-            index_name="test",
+            
             query_text="search",
         )
         assert index1 == index2
@@ -171,12 +130,12 @@ class TestVectorSearchIndex:
         """Test VectorSearchIndex equality with different values."""
         index1 = VectorSearchIndex(
             data_type=str,
-            index_name="test",
+            
             query_text="search1",
         )
         index2 = VectorSearchIndex(
             data_type=str,
-            index_name="test",
+            
             query_text="search2",
         )
         assert index1 != index2
@@ -185,7 +144,7 @@ class TestVectorSearchIndex:
         """Test VectorSearchIndex equality with different type."""
         index = VectorSearchIndex(
             data_type=str,
-            index_name="test",
+            
             query_text="search",
         )
         assert index != "not an index"
@@ -194,7 +153,7 @@ class TestVectorSearchIndex:
         """Test VectorSearchIndex hash."""
         index = VectorSearchIndex(
             data_type=str,
-            index_name="test",
+            
             query_text="search",
         )
         hash_val = hash(index)
@@ -208,36 +167,34 @@ class TestPathIndex:
         """Test PathIndex initialization."""
         index = PathIndex(
             data_type=bytes,
-            index_name="test",
+            
             path="/test/path",
         )
         assert index.data_type == bytes
-        assert index.index_name == "test"
         assert index.path == "/test/path"
 
     def test_repr(self) -> None:
         """Test PathIndex string representation."""
         index = PathIndex(
             data_type=bytes,
-            index_name="test",
+            
             path="/test/path",
         )
         repr_str = repr(index)
         assert "PathIndex" in repr_str
         assert "bytes" in repr_str
-        assert "test" in repr_str
         assert "/test/path" in repr_str
 
     def test_eq(self) -> None:
         """Test PathIndex equality."""
         index1 = PathIndex(
             data_type=bytes,
-            index_name="test",
+            
             path="/test/path",
         )
         index2 = PathIndex(
             data_type=bytes,
-            index_name="test",
+            
             path="/test/path",
         )
         assert index1 == index2
@@ -246,12 +203,12 @@ class TestPathIndex:
         """Test PathIndex equality with different values."""
         index1 = PathIndex(
             data_type=bytes,
-            index_name="test",
+            
             path="/test/path1",
         )
         index2 = PathIndex(
             data_type=bytes,
-            index_name="test",
+            
             path="/test/path2",
         )
         assert index1 != index2
@@ -260,7 +217,7 @@ class TestPathIndex:
         """Test PathIndex equality with different type."""
         index = PathIndex(
             data_type=bytes,
-            index_name="test",
+            
             path="/test/path",
         )
         assert index != "not an index"
@@ -269,7 +226,7 @@ class TestPathIndex:
         """Test PathIndex hash."""
         index = PathIndex(
             data_type=bytes,
-            index_name="test",
+            
             path="/test/path",
         )
         hash_val = hash(index)
@@ -286,5 +243,4 @@ class TestParamIndex:
         index = create_index(int, age=25, active=True)
 
         assert index.data_type == int
-        assert index.index_name == "dynamic"
         assert index.params == {"age": 25, "active": True}

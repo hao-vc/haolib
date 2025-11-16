@@ -3,10 +3,16 @@
 from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from functools import wraps
+from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar
 
 if TYPE_CHECKING:
     from haolib.storages.indexes.abstract import SearchIndex
+
+P = ParamSpec("P")
+T_Storage = TypeVar("T_Storage")
+T_User = TypeVar("T_User")
+T_Data = TypeVar("T_Data")
 
 
 @dataclass(frozen=True)
@@ -26,6 +32,8 @@ class DataTypeRegistry:
         self._storage_to_users: dict[type, list[TypeRegistration]] = defaultdict(list)
         self._user_to_storages: dict[type, list[TypeRegistration]] = defaultdict(list)
         self._indexes: dict[type, dict[str, Callable[..., SearchIndex[Any]]]] = defaultdict(dict)
+        # Temporary storage for to_storage/from_storage pairs before both are registered
+        self._pending_mappings: dict[tuple[type, type], dict[str, Callable[..., Any]]] = {}
 
     def register[T_Storage, T_User](
         self,
@@ -258,3 +266,160 @@ class DataTypeRegistry:
 
         """
         return list(self._indexes.get(data_type, {}).keys())
+
+    def to_storage[T_User, T_Storage](
+        self,
+        user_type: type[T_User],
+        storage_type: type[T_Storage],
+    ) -> Callable[[Callable[[T_User], T_Storage]], Callable[[T_User], T_Storage]]:
+        """Decorator to register to_storage mapping function.
+
+        FastAPI-style decorator for registering domain-to-storage conversion.
+
+        Args:
+            user_type: Domain type (e.g., User).
+            storage_type: Storage type (e.g., UserModel).
+
+        Returns:
+            Decorator function.
+
+        Example:
+            ```python
+            registry = DataTypeRegistry()
+
+            @registry.to_storage(User, UserModel)
+            def to_storage(user: User) -> UserModel:
+                return UserModel(id=user.id, name=user.name, age=user.age, email=user.email)
+            ```
+
+        """
+        key = (user_type, storage_type)
+
+        def decorator(func: Callable[[T_User], T_Storage]) -> Callable[[T_User], T_Storage]:
+            # Store the function temporarily
+            if key not in self._pending_mappings:
+                self._pending_mappings[key] = {}
+            self._pending_mappings[key]["to_storage"] = func
+
+            # If from_storage is already registered, complete the registration
+            if "from_storage" in self._pending_mappings.get(key, {}):
+                from_storage_func = self._pending_mappings[key]["from_storage"]
+                self.register(
+                    storage_type=storage_type,
+                    user_type=user_type,
+                    to_storage=func,
+                    from_storage=from_storage_func,
+                )
+                # Clean up temporary storage
+                del self._pending_mappings[key]
+
+            @wraps(func)
+            def wrapper(user: T_User) -> T_Storage:
+                return func(user)
+
+            return wrapper
+
+        return decorator
+
+    def from_storage[T_User, T_Storage](
+        self,
+        user_type: type[T_User],
+        storage_type: type[T_Storage],
+    ) -> Callable[[Callable[[T_Storage], T_User]], Callable[[T_Storage], T_User]]:
+        """Decorator to register from_storage mapping function.
+
+        FastAPI-style decorator for registering storage-to-domain conversion.
+
+        Args:
+            user_type: Domain type (e.g., User).
+            storage_type: Storage type (e.g., UserModel).
+
+        Returns:
+            Decorator function.
+
+        Example:
+            ```python
+            registry = DataTypeRegistry()
+
+            @registry.from_storage(User, UserModel)
+            def from_storage(model: UserModel) -> User:
+                return User(id=model.id, name=model.name, age=model.age, email=model.email)
+            ```
+
+        """
+        key = (user_type, storage_type)
+
+        def decorator(func: Callable[[T_Storage], T_User]) -> Callable[[T_Storage], T_User]:
+            # Store the function temporarily
+            if key not in self._pending_mappings:
+                self._pending_mappings[key] = {}
+            self._pending_mappings[key]["from_storage"] = func
+
+            # If to_storage is already registered, complete the registration
+            if "to_storage" in self._pending_mappings.get(key, {}):
+                to_storage_func = self._pending_mappings[key]["to_storage"]
+                self.register(
+                    storage_type=storage_type,
+                    user_type=user_type,
+                    to_storage=to_storage_func,
+                    from_storage=func,
+                )
+                # Clean up temporary storage
+                del self._pending_mappings[key]
+
+            @wraps(func)
+            def wrapper(model: T_Storage) -> T_User:
+                return func(model)
+
+            return wrapper
+
+        return decorator
+
+    def index[T_Data](
+        self,
+        data_type: type[T_Data],
+    ) -> Callable[[Callable[P, "SearchIndex[T_Data]"]], Callable[P, "SearchIndex[T_Data]"]]:
+        """Decorator to register index function.
+
+        FastAPI-style decorator for registering search indexes.
+        Automatically extracts index name from function name.
+
+        Args:
+            data_type: Data type for the index (e.g., User).
+
+        Returns:
+            Decorator function.
+
+        Example:
+            ```python
+            registry = DataTypeRegistry()
+
+            @registry.index(User)
+            def by_email(email: str) -> SQLQueryIndex[User]:
+                return SQLQueryIndex(
+                    query=select(UserModel).where(UserModel.email == email)
+                )
+
+            # Usage
+            idx = by_email("john@example.com")
+            # Or through registry
+            idx = registry.get_index(User, "by_email")("john@example.com")
+            ```
+
+        """
+        from haolib.storages.indexes.abstract import SearchIndex
+
+        def decorator(func: Callable[P, SearchIndex[T_Data]]) -> Callable[P, SearchIndex[T_Data]]:
+            # Extract index name from function name
+            index_name = func.__name__
+
+            # Register the index
+            self.register_index(data_type, index_name, func)
+
+            @wraps(func)
+            def wrapper(*args: P.args, **kwargs: P.kwargs) -> SearchIndex[T_Data]:
+                return func(*args, **kwargs)
+
+            return wrapper
+
+        return decorator

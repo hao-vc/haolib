@@ -145,6 +145,7 @@ class PipelineValidator:
         if isinstance(operation, TargetBoundOperation):
             actual_op = operation.operation
             has_target = True
+            target = operation.target
         elif isinstance(operation, TargetSwitch):
             # Validate target switch
             if not isinstance(operation.next_operation, TargetBoundOperation):
@@ -155,9 +156,11 @@ class PipelineValidator:
                 )
             actual_op = operation.next_operation.operation
             has_target = True
+            target = operation.target_target
         else:
             actual_op = operation
             has_target = False
+            target = None
 
         # Check if operation needs previous_result
         # actual_op can be Operation, Pipeline, or TargetSwitch, but we only check Operation
@@ -183,15 +186,45 @@ class PipelineValidator:
                 operation_index=index,
             )
 
+        # Validate that operations requiring previous_result should NOT be bound to target
+        # These operations (Filter, Map, Reduce, Transform) execute in Python, not in storage
+        if needs_previous and has_target:
+            op_name = type(actual_op).__name__ if isinstance(actual_op, Operation) else "Operation"
+            target_name = type(target).__name__ if target else "target"
+            msg = (
+                f"Operation {op_name} at index {index} requires previous result and executes in Python. "
+                f"It should not be bound to {target_name} using ^ operator. "
+                f"Remove the ^ {target_name} binding - the operation will execute in Python automatically."
+            )
+            raise PipelineValidationError(
+                msg,
+                operation_index=index,
+            )
+
         # Validate target requirement
         # Operations that require target (Read, Create, Update, Delete) must be bound to target
         # Exception: CreateOperation can receive previous_result and use it as data
         # But ReadOperation, UpdateOperation, DeleteOperation always need target
         if needs_target and not has_target:
-            # CreateOperation can work without target if it receives previous_result
-            if isinstance(actual_op, CreateOperation) and receives_previous:
-                # This is OK - CreateOperation can use previous_result as data
-                pass
+            # CreateOperation can work without target if it receives previous_result OR has data
+            if isinstance(actual_op, CreateOperation):
+                if receives_previous:
+                    # This is OK - CreateOperation can use previous_result as data
+                    pass
+                elif actual_op.data:
+                    # This is OK - CreateOperation has explicit data
+                    pass
+                else:
+                    # CreateOperation has no data and no previous_result - error
+                    op_name = type(actual_op).__name__ if isinstance(actual_op, Operation) else "Operation"
+                    msg = (
+                        f"Operation {op_name} at index {index} has no data and no previous_result. "
+                        f"Either provide data to createo() or ensure it receives previous_result from pipeline."
+                    )
+                    raise PipelineValidationError(
+                        msg,
+                        operation_index=index,
+                    )
             else:
                 # All other target-requiring operations must have target
                 op_name = type(actual_op).__name__ if isinstance(actual_op, Operation) else "Operation"

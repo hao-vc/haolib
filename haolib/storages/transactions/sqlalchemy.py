@@ -53,6 +53,9 @@ class SQLAlchemyStorageTransaction(Transaction):
             # Exception occurred - rollback
             await self._session.rollback()
 
+        # We need to set the session to None to fix the problem with the garbage collection.
+        self._session = None
+
         self._in_transaction = False
 
     async def commit(self) -> None:

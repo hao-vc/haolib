@@ -52,7 +52,7 @@ class TestIndexHandler:
     async def test_build_query_sql_query_index(self, handler: IndexHandler, mock_session: Any) -> None:
         """Test build_query with SQLQueryIndex (line 51)."""
         query = select(IndexHandlerTestModel)
-        index = SQLQueryIndex(data_type=str, index_name="test", query=query)
+        index = SQLQueryIndex(query=query)
 
         result = await handler.build_query(index, mock_session)
 
@@ -79,7 +79,7 @@ class TestIndexHandler:
         class UnregisteredType:
             pass
 
-        index = ParamIndex(data_type=UnregisteredType, index_name="test")
+        index = ParamIndex(data_type=UnregisteredType)
 
         with pytest.raises(ValueError, match="No storage model registered"):
             await handler._build_param_index_query(index, mock_session)
@@ -87,7 +87,7 @@ class TestIndexHandler:
     @pytest.mark.asyncio
     async def test_build_param_index_query_with_params(self, handler: IndexHandler, mock_session: Any) -> None:
         """Test _build_param_index_query with parameters."""
-        index = ParamIndex(data_type=str, index_name="by_name", name="test")
+        index = ParamIndex(data_type=str, name="test")
 
         query = await handler._build_param_index_query(index, mock_session)
 
@@ -98,7 +98,7 @@ class TestIndexHandler:
     @pytest.mark.asyncio
     async def test_build_param_index_query_without_params(self, handler: IndexHandler, mock_session: Any) -> None:
         """Test _build_param_index_query without parameters."""
-        index = ParamIndex(data_type=str, index_name="all")
+        index = ParamIndex(data_type=str)
 
         query = await handler._build_param_index_query(index, mock_session)
 

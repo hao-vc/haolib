@@ -27,6 +27,75 @@ class IndexHandler:
         """
         self._registry = registry
 
+    def _extract_model_from_query(self, query: Select[Any]) -> type[DeclarativeBase] | None:
+        """Extract storage model from SQLAlchemy Select query.
+
+        Args:
+            query: SQLAlchemy Select query.
+
+        Returns:
+            Storage model type, or None if cannot be extracted.
+
+        """
+        # Try to get model from query.get_final_froms() (tables/models in FROM clause)
+        froms = query.get_final_froms() if hasattr(query, "get_final_froms") else getattr(query, "froms", None)
+        if froms:
+            for from_item in froms:
+                # Check if it's a mapped class (DeclarativeBase)
+                if isinstance(from_item, type) and issubclass(from_item, DeclarativeBase):
+                    return from_item
+                # Check if it's a Table and get mapped class from it
+                if hasattr(from_item, "entity") and isinstance(from_item.entity, type):
+                    if issubclass(from_item.entity, DeclarativeBase):
+                        return from_item.entity
+
+        # Try to get from column_descriptions (for Select queries)
+        if hasattr(query, "column_descriptions") and query.column_descriptions:
+            for desc in query.column_descriptions:
+                if "entity" in desc and desc["entity"] is not None:
+                    entity = desc["entity"]
+                    if isinstance(entity, type) and issubclass(entity, DeclarativeBase):
+                        return entity
+
+        # Try to get from selected_columns
+        if hasattr(query, "selected_columns"):
+            for col in query.selected_columns:
+                if hasattr(col, "entity") and col.entity is not None:
+                    entity = col.entity
+                    if isinstance(entity, type) and issubclass(entity, DeclarativeBase):
+                        return entity
+
+        return None
+
+    def get_data_type_from_query(self, query: Select[Any]) -> type[Any]:
+        """Get user data type from SQLAlchemy query.
+
+        Extracts storage model from query and finds corresponding user type from registry.
+
+        Args:
+            query: SQLAlchemy Select query.
+
+        Returns:
+            User data type.
+
+        Raises:
+            ValueError: If cannot extract model from query or model is not registered.
+
+        """
+        # Extract storage model from query
+        storage_model = self._extract_model_from_query(query)
+        if storage_model is None:
+            msg = "Cannot extract model type from SQLAlchemy query. Please ensure query uses a mapped model (e.g., select(UserModel))."
+            raise ValueError(msg)
+
+        # Find user type from registry
+        registration = self._registry.get_for_storage_type(storage_model)
+        if not registration:
+            msg = f"Storage model {storage_model} is not registered in DataTypeRegistry"
+            raise ValueError(msg)
+
+        return registration.user_type
+
     async def build_query[T_Data](
         self,
         index: SearchIndex[T_Data],

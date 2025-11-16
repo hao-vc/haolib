@@ -65,7 +65,7 @@ def predicate_invalid_field(u: Any) -> bool:
 
 def predicate_non_attribute_left(u: Any) -> bool:
     """Predicate with non-attribute left side."""
-    return u.age == 25
+    return 25 == u.age  # Constant on left, attribute on right
 
 
 def predicate_non_constant_right(u: Any) -> bool:

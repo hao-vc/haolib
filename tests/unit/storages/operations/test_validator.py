@@ -87,15 +87,24 @@ class TestPipelineValidator:
 
     def test_validate_create_without_target_and_without_previous_result(self) -> None:
         """Test validation fails when create has no target and no previous result."""
-        # Invalid: create requires target but is not bound and doesn't receive previous result
-        pipeline = createo([User(name="Alice", age=25, email="alice@example.com")])
+        # Invalid: create has no data and no previous result
+        pipeline = createo()
 
         validator = PipelineValidator()
         with pytest.raises(PipelineValidationError) as exc_info:
             validator.validate(pipeline)
 
         assert exc_info.value.operation_index == 0
-        assert "requires target binding" in str(exc_info.value)
+        assert "has no data and no previous_result" in str(exc_info.value)
+
+    def test_validate_create_without_target_but_with_data(self) -> None:
+        """Test validation passes when create has data but no target."""
+        # Valid: create has explicit data, doesn't need target or previous_result
+        pipeline = createo([User(name="Alice", age=25, email="alice@example.com")])
+
+        validator = PipelineValidator()
+        # Should not raise - create has data
+        validator.validate(pipeline)
 
     def test_validate_map_without_previous_operation(self) -> None:
         """Test validation fails when map is first operation."""
@@ -196,3 +205,72 @@ class TestPipelineValidator:
 
         with pytest.raises(PipelineValidationError):
             invalid_pipeline.validate()
+
+    def test_validate_map_bound_to_target(self) -> None:
+        """Test validation fails when map operation is bound to target."""
+        from haolib.storages.operations.base import Pipeline  # Moved import here
+
+        # Invalid: map requires previous result but is bound to target
+        pipeline: Pipeline[Any, Any, Any] = (
+            reado(search_index=ParamIndex(User)) ^ mock_storage
+            | mapo(lambda u, _idx: u.name) ^ mock_storage
+        )
+
+        validator = PipelineValidator()
+        with pytest.raises(PipelineValidationError) as exc_info:
+            validator.validate(pipeline)
+
+        assert exc_info.value.operation_index == 1
+        assert "requires previous result and executes in Python" in str(exc_info.value)
+        assert "should not be bound" in str(exc_info.value)
+
+    def test_validate_filter_bound_to_target(self) -> None:
+        """Test validation fails when filter operation is bound to target."""
+        from haolib.storages.operations.base import Pipeline  # Moved import here
+
+        # Invalid: filter requires previous result but is bound to target
+        pipeline: Pipeline[Any, Any, Any] = (
+            reado(search_index=ParamIndex(User)) ^ mock_storage
+            | filtero(lambda u: u.age >= 18) ^ mock_storage
+        )
+
+        validator = PipelineValidator()
+        with pytest.raises(PipelineValidationError) as exc_info:
+            validator.validate(pipeline)
+
+        assert exc_info.value.operation_index == 1
+        assert "requires previous result and executes in Python" in str(exc_info.value)
+
+    def test_validate_reduce_bound_to_target(self) -> None:
+        """Test validation fails when reduce operation is bound to target."""
+        from haolib.storages.operations.base import Pipeline  # Moved import here
+
+        # Invalid: reduce requires previous result but is bound to target
+        pipeline: Pipeline[Any, Any, Any] = (
+            reado(search_index=ParamIndex(User)) ^ mock_storage
+            | reduceo(lambda acc, u: acc + u.age, 0) ^ mock_storage
+        )
+
+        validator = PipelineValidator()
+        with pytest.raises(PipelineValidationError) as exc_info:
+            validator.validate(pipeline)
+
+        assert exc_info.value.operation_index == 1
+        assert "requires previous result and executes in Python" in str(exc_info.value)
+
+    def test_validate_transform_bound_to_target(self) -> None:
+        """Test validation fails when transform operation is bound to target."""
+        from haolib.storages.operations.base import Pipeline  # Moved import here
+
+        # Invalid: transform requires previous result but is bound to target
+        pipeline: Pipeline[Any, Any, Any] = (
+            reado(search_index=ParamIndex(User)) ^ mock_storage
+            | transformo(lambda users: [u.name for u in users]) ^ mock_storage
+        )
+
+        validator = PipelineValidator()
+        with pytest.raises(PipelineValidationError) as exc_info:
+            validator.validate(pipeline)
+
+        assert exc_info.value.operation_index == 1
+        assert "requires previous result and executes in Python" in str(exc_info.value)

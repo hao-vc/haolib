@@ -30,19 +30,16 @@ class ParamIndex[T_Data](SearchIndex[T_Data]):
     def __init__(
         self,
         data_type: type[T_Data],
-        index_name: str = "dynamic",
         **params: Any,
     ) -> None:
         """Create index from parameters.
 
         Args:
             data_type: Type of data to search.
-            index_name: Name of the index (default: "dynamic").
             **params: Search parameters (e.g., age=25, email="john@example.com").
 
         """
         self.__haolib_data_type__ = data_type
-        self.__haolib_index_name__ = index_name
         self.params = params
 
     @property
@@ -55,20 +52,9 @@ class ParamIndex[T_Data](SearchIndex[T_Data]):
         """
         return self.__haolib_data_type__
 
-    @property
-    def index_name(self) -> str:
-        """Name of the index.
-
-        Returns:
-            Index name.
-
-        """
-        return self.__haolib_index_name__
-
 
 def create_index[T_Data](
     data_type: type[T_Data],
-    index_name: str = "dynamic",
     **params: Any,
 ) -> ParamIndex[T_Data]:
     """Create a parameter-based index.
@@ -77,7 +63,6 @@ def create_index[T_Data](
 
     Args:
         data_type: Type of data to search.
-        index_name: Name of the index.
         **params: Search parameters.
 
     Returns:
@@ -92,4 +77,4 @@ def create_index[T_Data](
         ```
 
     """
-    return ParamIndex(data_type=data_type, index_name=index_name, **params)
+    return ParamIndex(data_type=data_type, **params)

@@ -234,14 +234,24 @@ class S3OperationsHandler:
     async def execute_create[T_Data](
         self,
         operation: CreateOperation[T_Data],
-    ) -> list[T_Data]:
+    ) -> list[tuple[T_Data, str]]:
         """Execute create operation.
 
         Args:
             operation: Create operation to execute.
 
         Returns:
-            List of created data (with paths stored if needed).
+            List of tuples (created_data, s3_path) for each created item.
+
+        Example:
+            ```python
+            result = await storage.execute(createo([user1, user2]))
+            for data, path in result:
+                print(f"Saved {data} to {path}")
+            # Output:
+            # Saved User(name='Alice') to User/123e4567-e89b-12d3-a456-426614174000.json
+            # Saved User(name='Bob') to User/123e4567-e89b-12d3-a456-426614174001.json
+            ```
 
         """
         # Emit before event
@@ -279,16 +289,21 @@ class S3OperationsHandler:
 
             # Convert back to user type
             if registration:
-                result.append(registration.from_storage(storage_item))
+                user_item = registration.from_storage(storage_item)
             else:
-                result.append(storage_item)
+                user_item = storage_item
+
+            # Return tuple (data, path)
+            result.append((user_item, path))
 
         # Emit after event
+        # Extract just the data for the event (backward compatibility)
+        data_result = [item for item, _ in result]
         if self._storage is not None:
             after_event = AfterCreateEvent(
                 component=self._storage,
                 operation=operation,
-                result=result,
+                result=data_result,
                 transaction=None,
             )
             await self._storage.events.emit(after_event)

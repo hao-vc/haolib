@@ -1,6 +1,8 @@
 """Conftest for storage integration tests."""
 
+import uuid
 from collections.abc import AsyncIterator
+from contextlib import suppress
 from typing import Any
 
 import pytest_asyncio
@@ -8,9 +10,17 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.pool import StaticPool
 
+from haolib.database.files.s3.clients.abstract import (
+    AbstractS3Client,
+    S3BucketAlreadyExistsClientException,
+    S3BucketAlreadyOwnedByYouClientException,
+)
+from haolib.database.files.s3.clients.pydantic import S3DeleteObjectsDelete, S3DeleteObjectsDeleteObject
+from haolib.storages import S3Storage
 from haolib.storages.data_types.registry import DataTypeRegistry
 from haolib.storages.sqlalchemy import SQLAlchemyStorage
-from haolib.storages.transactions.sqlalchemy import SQLAlchemyStorageTransaction
+
+BUCKET_NAME = "test-storage-bucket"
 
 
 class Base(DeclarativeBase):
@@ -76,7 +86,7 @@ async def sqlalchemy_storage(
         poolclass=StaticPool,
         connect_args={"check_same_thread": False},
     )
-    async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    async_session = async_sessionmaker[AsyncSession](engine, class_=AsyncSession, expire_on_commit=False)
 
     # Create tables
     def create_tables(sync_conn: Any) -> None:
@@ -106,6 +116,36 @@ async def sqlalchemy_storage(
     # In a real app, you'd handle this differently
     async with engine.begin() as conn:
         await conn.run_sync(drop_tables)
+
+
+@pytest_asyncio.fixture
+async def s3_storage(
+    s3_client: AbstractS3Client,
+    registry: DataTypeRegistry,
+) -> AsyncIterator[S3Storage]:
+    """Create S3 storage for testing."""
+    # Create bucket (ignore if already exists)
+    with suppress(S3BucketAlreadyExistsClientException, S3BucketAlreadyOwnedByYouClientException):
+        await s3_client.create_bucket(BUCKET_NAME)
+
+    storage = S3Storage(
+        s3_client=s3_client,
+        bucket=BUCKET_NAME,
+        data_type_registry=registry,
+    )
+
+    yield storage
+
+    # Cleanup: delete all objects in bucket
+    with suppress(Exception):
+        # List all objects
+        response = await s3_client.list_objects_v2(bucket=BUCKET_NAME)
+        if response.contents:
+            # Delete objects
+            delete_objects = S3DeleteObjectsDelete(
+                objects=[S3DeleteObjectsDeleteObject(key=obj.key) for obj in response.contents if obj.key is not None]
+            )
+            await s3_client.delete_objects(bucket=BUCKET_NAME, delete=delete_objects)
 
 
 # Transaction fixture removed - transactions are now automatic
