@@ -1101,7 +1101,7 @@ class AbstractS3Client(Protocol):
         """
         ...
 
-    def generate_presigned_url(
+    async def generate_presigned_url(
         self,
         bucket: str,
         key: str,

@@ -694,7 +694,7 @@ async def test_generate_presigned_url_get_object(s3_client: AbstractS3Client, cl
     await s3_client.create_bucket(bucket_name)
     await s3_client.put_object(bucket_name, key, body=body)
 
-    url = s3_client.generate_presigned_url(
+    url = await s3_client.generate_presigned_url(
         bucket=bucket_name,
         key=key,
         client_method="get_object",
@@ -720,7 +720,7 @@ async def test_generate_presigned_url_get_object_with_params(
     await s3_client.create_bucket(bucket_name)
     await s3_client.put_object(bucket_name, key, body=body)
 
-    url = s3_client.generate_presigned_url(
+    url = await s3_client.generate_presigned_url(
         bucket=bucket_name,
         key=key,
         client_method="get_object",
@@ -742,7 +742,7 @@ async def test_generate_presigned_url_put_object(s3_client: AbstractS3Client, cl
     key = "upload-key"
     await s3_client.create_bucket(bucket_name)
 
-    url = s3_client.generate_presigned_url(
+    url = await s3_client.generate_presigned_url(
         bucket=bucket_name,
         key=key,
         client_method="put_object",
@@ -765,7 +765,7 @@ async def test_generate_presigned_url_put_object_with_metadata(
     key = "upload-key"
     await s3_client.create_bucket(bucket_name)
 
-    url = s3_client.generate_presigned_url(
+    url = await s3_client.generate_presigned_url(
         bucket=bucket_name,
         key=key,
         client_method="put_object",
@@ -792,14 +792,14 @@ async def test_generate_presigned_url_get_object_bucket_not_exists(
     # So we test both behaviors.
     if isinstance(s3_client, MockS3Client):
         with pytest.raises(S3NoSuchBucketClientException):
-            s3_client.generate_presigned_url(
+            await s3_client.generate_presigned_url(
                 bucket="non-existent-bucket",
                 key="test-key",
                 client_method="get_object",
             )
     else:
         # For real clients, presigned URL generation succeeds even for non-existent buckets
-        url = s3_client.generate_presigned_url(
+        url = await s3_client.generate_presigned_url(
             bucket="non-existent-bucket",
             key="test-key",
             client_method="get_object",
@@ -821,14 +821,14 @@ async def test_generate_presigned_url_get_object_key_not_exists(
     # The error occurs when trying to use the URL
     if isinstance(s3_client, MockS3Client):
         with pytest.raises(S3NoSuchKeyClientException):
-            s3_client.generate_presigned_url(
+            await s3_client.generate_presigned_url(
                 bucket=bucket_name,
                 key="non-existent-key",
                 client_method="get_object",
             )
     else:
         # For real clients, presigned URL generation succeeds even for non-existent keys
-        url = s3_client.generate_presigned_url(
+        url = await s3_client.generate_presigned_url(
             bucket=bucket_name,
             key="non-existent-key",
             client_method="get_object",
@@ -844,14 +844,14 @@ async def test_generate_presigned_url_put_object_bucket_not_exists(
     """Test generating a presigned URL for uploading to a non-existent bucket."""
     if isinstance(s3_client, MockS3Client):
         with pytest.raises(S3NoSuchBucketClientException):
-            s3_client.generate_presigned_url(
+            await s3_client.generate_presigned_url(
                 bucket="non-existent-bucket",
                 key="test-key",
                 client_method="put_object",
             )
     else:
         # For real clients, presigned URL generation succeeds even for non-existent buckets
-        url = s3_client.generate_presigned_url(
+        url = await s3_client.generate_presigned_url(
             bucket="non-existent-bucket",
             key="test-key",
             client_method="put_object",
@@ -871,7 +871,7 @@ async def test_generate_presigned_url_custom_expires(s3_client: AbstractS3Client
 
     # Test with different expiration times
     for expires_in in [60, 3600, 86400]:
-        url = s3_client.generate_presigned_url(
+        url = await s3_client.generate_presigned_url(
             bucket=bucket_name,
             key=key,
             client_method="get_object",
@@ -890,7 +890,7 @@ async def test_generate_presigned_url_with_version_id(s3_client: AbstractS3Clien
     await s3_client.create_bucket(bucket_name)
     await s3_client.put_object(bucket_name, key, body=body)
 
-    url = s3_client.generate_presigned_url(
+    url = await s3_client.generate_presigned_url(
         bucket=bucket_name,
         key=key,
         client_method="get_object",
@@ -915,7 +915,7 @@ async def test_generate_presigned_url_get_object_all_response_params(
     await s3_client.create_bucket(bucket_name)
     await s3_client.put_object(bucket_name, key, body=body)
 
-    url = s3_client.generate_presigned_url(
+    url = await s3_client.generate_presigned_url(
         bucket=bucket_name,
         key=key,
         client_method="get_object",
@@ -943,7 +943,7 @@ async def test_generate_presigned_url_put_object_all_params(
     key = "upload-key"
     await s3_client.create_bucket(bucket_name)
 
-    url = s3_client.generate_presigned_url(
+    url = await s3_client.generate_presigned_url(
         bucket=bucket_name,
         key=key,
         client_method="put_object",
@@ -970,7 +970,7 @@ async def test_generate_presigned_url_put_object_with_sse_kms(
     key = "upload-key"
     await s3_client.create_bucket(bucket_name)
 
-    url = s3_client.generate_presigned_url(
+    url = await s3_client.generate_presigned_url(
         bucket=bucket_name,
         key=key,
         client_method="put_object",
@@ -996,7 +996,7 @@ async def test_generate_presigned_url_get_object_with_sse_customer(
     await s3_client.create_bucket(bucket_name)
     await s3_client.put_object(bucket_name, key, body=body)
 
-    url = s3_client.generate_presigned_url(
+    url = await s3_client.generate_presigned_url(
         bucket=bucket_name,
         key=key,
         client_method="get_object",
@@ -1024,7 +1024,7 @@ async def test_generate_presigned_url_invalid_client_method(
     # For aioboto3 client, it will raise InvalidRequestException
     # For mock client, it should handle gracefully
     try:
-        url = s3_client.generate_presigned_url(
+        url = await s3_client.generate_presigned_url(
             bucket=bucket_name,
             key=key,
             client_method="invalid_method",  # type: ignore[arg-type]
@@ -1048,7 +1048,7 @@ async def test_generate_presigned_url_special_characters_in_key(
     await s3_client.create_bucket(bucket_name)
     await s3_client.put_object(bucket_name, key, body=body)
 
-    url = s3_client.generate_presigned_url(
+    url = await s3_client.generate_presigned_url(
         bucket=bucket_name,
         key=key,
         client_method="get_object",
@@ -1071,7 +1071,7 @@ async def test_generate_presigned_url_minimum_expires(s3_client: AbstractS3Clien
     await s3_client.create_bucket(bucket_name)
     await s3_client.put_object(bucket_name, key, body=body)
 
-    url = s3_client.generate_presigned_url(
+    url = await s3_client.generate_presigned_url(
         bucket=bucket_name,
         key=key,
         client_method="get_object",
@@ -1092,7 +1092,7 @@ async def test_generate_presigned_url_maximum_expires(s3_client: AbstractS3Clien
     await s3_client.put_object(bucket_name, key, body=body)
 
     # AWS allows up to 7 days (604800 seconds) for presigned URLs
-    url = s3_client.generate_presigned_url(
+    url = await s3_client.generate_presigned_url(
         bucket=bucket_name,
         key=key,
         client_method="get_object",
@@ -1120,7 +1120,7 @@ async def test_generate_presigned_url_different_acls(s3_client: AbstractS3Client
     ]
 
     for acl in acls:
-        url = s3_client.generate_presigned_url(
+        url = await s3_client.generate_presigned_url(
             bucket=bucket_name,
             key=f"{key}-{acl}",
             client_method="put_object",
@@ -1145,7 +1145,7 @@ async def test_generate_presigned_url_empty_key(s3_client: AbstractS3Client, cle
     if isinstance(s3_client, MockS3Client):
         try:
             await s3_client.put_object(bucket_name, key, body=body)
-            url = s3_client.generate_presigned_url(
+            url = await s3_client.generate_presigned_url(
                 bucket=bucket_name,
                 key=key,
                 client_method="get_object",
@@ -1176,7 +1176,7 @@ async def test_generate_presigned_url_very_long_key(s3_client: AbstractS3Client,
         # Some S3 backends may not support very long keys
         pytest.skip("Very long keys not supported by this S3 backend")
 
-    url = s3_client.generate_presigned_url(
+    url = await s3_client.generate_presigned_url(
         bucket=bucket_name,
         key=key,
         client_method="get_object",
@@ -1199,7 +1199,7 @@ async def test_generate_presigned_url_multiple_calls_same_params(
     await s3_client.create_bucket(bucket_name)
     await s3_client.put_object(bucket_name, key, body=body)
 
-    url1 = s3_client.generate_presigned_url(
+    url1 = await s3_client.generate_presigned_url(
         bucket=bucket_name,
         key=key,
         client_method="get_object",
@@ -1210,7 +1210,7 @@ async def test_generate_presigned_url_multiple_calls_same_params(
     # For mock client, we need longer delay since timestamp is in seconds
     await asyncio.sleep(1.1)
 
-    url2 = s3_client.generate_presigned_url(
+    url2 = await s3_client.generate_presigned_url(
         bucket=bucket_name,
         key=key,
         client_method="get_object",

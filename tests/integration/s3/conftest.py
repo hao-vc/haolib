@@ -876,7 +876,7 @@ class MockS3Client(AbstractS3Client):
 
         return S3PutObjectRetentionResponse()
 
-    def generate_presigned_url(
+    async def generate_presigned_url(
         self,
         bucket: str,
         key: str,

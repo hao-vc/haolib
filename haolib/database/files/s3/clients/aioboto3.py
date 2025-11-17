@@ -5,7 +5,6 @@ from types import TracebackType
 from typing import Any, Self
 
 import aioboto3  # type: ignore[import-untyped]
-import boto3  # type: ignore[import-untyped]
 from botocore.exceptions import ClientError  # type: ignore[import-untyped]
 
 from haolib.database.files.s3.clients.abstract import (
@@ -127,12 +126,6 @@ class Aioboto3S3Client:
         self._verify = verify
         self._endpoint_url = endpoint_url
         self._client: Any = None
-        # Store credentials for sync client creation
-        self._aws_access_key_id = aws_access_key_id
-        self._aws_secret_access_key = aws_secret_access_key
-        self._aws_session_token = aws_session_token
-        self._region_name = region_name
-        self._profile_name = profile_name
 
     async def __aenter__(self) -> Self:
         """Enter the context manager."""
@@ -1572,7 +1565,7 @@ class Aioboto3S3Client:
             self._handle_client_error(e)
             raise  # This should never be reached, but for type checking
 
-    def generate_presigned_url(  # noqa: PLR0915
+    async def generate_presigned_url(
         self,
         bucket: str,
         key: str,
@@ -1648,30 +1641,9 @@ class Aioboto3S3Client:
             raise S3InvalidRequestClientException(error_msg)
 
         try:
-            # boto3's generate_presigned_url is synchronous
-            # In aioboto3, we need to use a sync boto3 client for this operation
-            # since generate_presigned_url doesn't make network calls
-            # Create a sync boto3 session with stored credentials
-            sync_session = boto3.Session(
-                aws_access_key_id=self._aws_access_key_id,
-                aws_secret_access_key=self._aws_secret_access_key,
-                aws_session_token=self._aws_session_token,
-                region_name=self._region_name,
-                profile_name=self._profile_name,
-            )
-
-            # Create sync client with same config as async client
-            sync_client_kwargs: dict[str, Any] = {}
-            if self._endpoint_url:
-                sync_client_kwargs["endpoint_url"] = self._endpoint_url
-            if self._verify is not None:
-                sync_client_kwargs["verify"] = self._verify
-            if not self._use_ssl:
-                sync_client_kwargs["use_ssl"] = False
-
-            sync_client = sync_session.client("s3", **sync_client_kwargs)
-
-            url = sync_client.generate_presigned_url(
+            # In aioboto3, generate_presigned_url is async and returns a coroutine
+            # We need to await it to get the actual URL string
+            url = await self._client.generate_presigned_url(
                 ClientMethod=client_method,
                 Params=params,
                 ExpiresIn=expires_in,
