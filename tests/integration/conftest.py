@@ -19,12 +19,10 @@ from haolib.dependencies.dishka.redis import RedisProvider
 from haolib.dependencies.dishka.sqlalchemy import SQLAlchemyProvider
 from haolib.entrypoints.fastapi import FastAPIEntrypoint
 from haolib.entrypoints.fastmcp import FastMCPEntrypoint
-from haolib.entrypoints.plugins.fastapi import (
-    FastAPIDishkaPlugin,
-    FastAPIExceptionHandlersPlugin,
-    FastAPIFastMCPPlugin,
-    FastAPIIdempotencyMiddlewarePlugin,
-)
+from haolib.entrypoints.plugins.fastapi.dishka import FastAPIDishkaPlugin
+from haolib.entrypoints.plugins.fastapi.exceptions import FastAPIExceptionHandlersPlugin
+from haolib.entrypoints.plugins.fastapi.fastmcp import FastAPIFastMCPPlugin
+from haolib.entrypoints.plugins.fastapi.idempotency import FastAPIIdempotencyMiddlewarePlugin
 from haolib.exceptions.base.fastapi import FastAPIBaseException
 from haolib.exceptions.handlers.fastapi import (
     fastapi_base_exception_handler,
@@ -80,6 +78,12 @@ class MockProvider(Provider):
 async def container() -> AsyncContainer:
     """Test container."""
     return make_async_container(SQLAlchemyProvider(), RedisProvider(), MockProvider())
+
+
+@pytest_asyncio.fixture
+async def app_config(container: AsyncContainer) -> MockAppConfig:
+    """App config."""
+    return await container.get(MockAppConfig)
 
 
 @pytest_asyncio.fixture()
