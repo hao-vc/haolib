@@ -8,19 +8,18 @@ from haolib.components.events import EventEmitter
 from haolib.components.plugins.helpers import apply_preset
 from haolib.components.plugins.registry import PluginRegistry
 from haolib.database.files.s3.clients.abstract import AbstractS3Client
-from haolib.storages.abstract import AbstractStorage
-from haolib.storages.data_types.registry import DataTypeRegistry
 from haolib.pipelines.base import Operation, Pipeline, TargetBoundOperation, TargetSwitch
+
 # Import operations lazily to avoid circular import
 # Operations are imported in methods that use them
-from haolib.storages.operations.s3 import S3OperationsHandler
-from haolib.storages.plugins.abstract import AbstractStoragePlugin, AbstractStoragePluginPreset
-from haolib.storages.targets.abstract import AbstractDataTarget
+from haolib.pipelines.context import PipelineContext
+from haolib.storages.abstract import AbstractStorage
+from haolib.storages.data_types.registry import DataTypeRegistry
 from haolib.storages.fluent.composites import (
     CreateComposite,
     DeleteComposite,
-    UpdateComposite,
     ReadComposite,
+    UpdateComposite,
 )
 from haolib.storages.fluent.protocols import (
     CreateOperatable,
@@ -29,9 +28,12 @@ from haolib.storages.fluent.protocols import (
     UpdateOperatable,
 )
 from haolib.storages.indexes.path import PathIndex
+
 # Import operations lazily to avoid circular import
 # Operations are imported in methods that use them
-from haolib.pipelines.context import PipelineContext
+from haolib.storages.operations.s3 import S3OperationsHandler
+from haolib.storages.plugins.abstract import AbstractStoragePlugin, AbstractStoragePluginPreset
+from haolib.storages.targets.abstract import AbstractDataTarget
 
 
 class S3OperationExecutor:
@@ -72,9 +74,13 @@ class S3OperationExecutor:
 
         """
         if isinstance(operation, Pipeline):
-            return await self._execute_pipeline(operation, previous_result=previous_result, pipeline_context=pipeline_context)
+            return await self._execute_pipeline(
+                operation, previous_result=previous_result, pipeline_context=pipeline_context
+            )
 
-        return await self._execute_operation(operation, previous_result=previous_result, pipeline_context=pipeline_context)
+        return await self._execute_operation(
+            operation, previous_result=previous_result, pipeline_context=pipeline_context
+        )
 
     async def _execute_operation[T_Result](
         self,
@@ -181,9 +187,19 @@ class S3OperationExecutor:
 
         # Execute first operation
         if isinstance(first_op, Pipeline):
-            first_result = await self._execute_pipeline(first_op, previous_result=previous_result, pipeline_context=pipeline_context, previous_operation=previous_operation)
+            first_result = await self._execute_pipeline(
+                first_op,
+                previous_result=previous_result,
+                pipeline_context=pipeline_context,
+                previous_operation=previous_operation,
+            )
         else:
-            first_result = await self._execute_operation(first_op, previous_result=previous_result, pipeline_context=pipeline_context, previous_operation=previous_operation)
+            first_result = await self._execute_operation(
+                first_op,
+                previous_result=previous_result,
+                pipeline_context=pipeline_context,
+                previous_operation=previous_operation,
+            )
 
         # Handle TargetBoundOperation and TargetSwitch in second operation
         second_op = pipeline.second
@@ -197,8 +213,18 @@ class S3OperationExecutor:
 
         # Execute second operation with first result and first_op as previous_operation
         if isinstance(second_op, Pipeline):
-            return await self._execute_pipeline(second_op, previous_result=first_result, pipeline_context=pipeline_context, previous_operation=first_op if isinstance(first_op, Operation) else None)
-        return await self._execute_operation(second_op, previous_result=first_result, pipeline_context=pipeline_context, previous_operation=first_op if isinstance(first_op, Operation) else None)
+            return await self._execute_pipeline(
+                second_op,
+                previous_result=first_result,
+                pipeline_context=pipeline_context,
+                previous_operation=first_op if isinstance(first_op, Operation) else None,
+            )
+        return await self._execute_operation(
+            second_op,
+            previous_result=first_result,
+            pipeline_context=pipeline_context,
+            previous_operation=first_op if isinstance(first_op, Operation) else None,
+        )
 
 
 class S3Storage(
@@ -417,7 +443,9 @@ class S3Storage(
 
         """
         # Operations execute immediately (no transaction needed for S3)
-        return await self._executor.execute(operation, previous_result=previous_result, pipeline_context=pipeline_context)
+        return await self._executor.execute(
+            operation, previous_result=previous_result, pipeline_context=pipeline_context
+        )
 
     def read[T_Data](
         self,

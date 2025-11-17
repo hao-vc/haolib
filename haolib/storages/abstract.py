@@ -3,9 +3,9 @@
 from typing import Any, Protocol, TypeVar
 
 from haolib.components.abstract import AbstractComponent
-from haolib.storages.data_types.registry import DataTypeRegistry
 from haolib.pipelines.base import Operation, Pipeline
 from haolib.pipelines.context import PipelineContext
+from haolib.storages.data_types.registry import DataTypeRegistry
 from haolib.storages.plugins.abstract import AbstractStoragePlugin, AbstractStoragePluginPreset
 from haolib.storages.targets.abstract import AbstractDataTarget
 

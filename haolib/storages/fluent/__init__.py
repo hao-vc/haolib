@@ -30,11 +30,10 @@ __all__ = [
     "PatchOperatable",
     "ReadComposite",
     "ReadDeleteComposite",
-    "ReadPatchComposite",
     "ReadOperatable",
+    "ReadPatchComposite",
     "ReadUpdateComposite",
     "ReadUpdateDeleteComposite",
     "UpdateComposite",
     "UpdateOperatable",
 ]
-

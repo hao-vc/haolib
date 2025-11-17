@@ -13,10 +13,12 @@ from sqlalchemy.inspection import inspect
 from sqlalchemy.orm import selectinload
 
 from haolib.storages.data_types.registry import DataTypeRegistry
+
 # Import events lazily to avoid circular import
 # Events are imported in methods that use them
 from haolib.storages.indexes.sql import SQLQueryIndex
 from haolib.storages.indexes.sqlalchemy import IndexHandler
+
 # Import operations lazily to avoid circular import
 # Operations are imported in methods that use them
 from haolib.storages.transactions.sqlalchemy import SQLAlchemyStorageTransaction
@@ -49,7 +51,7 @@ class SQLAlchemyOperationsHandler:
 
     async def execute_create[T_Data](
         self,
-        operation: "CreateOperation[T_Data]",
+        operation: CreateOperation[T_Data],
         transaction: SQLAlchemyStorageTransaction,
     ) -> list[T_Data]:
         """Execute create operation.
@@ -65,7 +67,7 @@ class SQLAlchemyOperationsHandler:
         # Emit before event
         if self._storage is not None:
             from haolib.storages.events.operations import BeforeCreateEvent  # noqa: PLC0415
-            
+
             before_event = BeforeCreateEvent(
                 component=self._storage,
                 operation=operation,
@@ -134,7 +136,7 @@ class SQLAlchemyOperationsHandler:
         # Emit after event
         if self._storage is not None:
             from haolib.storages.events.operations import AfterCreateEvent  # noqa: PLC0415
-            
+
             after_event = AfterCreateEvent(
                 component=self._storage,
                 operation=operation,
@@ -147,7 +149,7 @@ class SQLAlchemyOperationsHandler:
 
     async def execute_read[T_Data](
         self,
-        operation: "ReadOperation[T_Data]",
+        operation: ReadOperation[T_Data],
         transaction: SQLAlchemyStorageTransaction,
     ) -> AsyncIterator[T_Data]:
         """Execute read operation.
@@ -163,7 +165,7 @@ class SQLAlchemyOperationsHandler:
         # Emit before event
         if self._storage is not None:
             from haolib.storages.events.operations import BeforeReadEvent  # noqa: PLC0415
-            
+
             before_event = BeforeReadEvent(
                 component=self._storage,
                 operation=operation,
@@ -192,7 +194,7 @@ class SQLAlchemyOperationsHandler:
         # For now, we emit before the iterator is returned
         if self._storage is not None:
             from haolib.storages.events.operations import AfterReadEvent  # noqa: PLC0415
-            
+
             after_event = AfterReadEvent(
                 component=self._storage,
                 operation=operation,
@@ -203,7 +205,7 @@ class SQLAlchemyOperationsHandler:
 
     async def execute_patch[T_Data](  # noqa: PLR0915
         self,
-        operation: "PatchOperation[T_Data]",
+        operation: PatchOperation[T_Data],
         transaction: SQLAlchemyStorageTransaction,
         previous_result: Any | None = None,
     ) -> list[T_Data]:
@@ -230,7 +232,7 @@ class SQLAlchemyOperationsHandler:
             # Emit before event for pipeline mode
             if self._storage is not None:
                 from haolib.storages.events.operations import BeforePatchEvent  # noqa: PLC0415
-                
+
                 before_event = BeforePatchEvent(
                     component=self._storage,
                     operation=operation,
@@ -239,7 +241,7 @@ class SQLAlchemyOperationsHandler:
                 await self._storage.events.emit(before_event)
             # Pipeline mode: use previous_result
             from collections.abc import AsyncIterator  # noqa: PLC0415
-            
+
             # Collect items from previous_result
             if isinstance(previous_result, AsyncIterator):
                 items = [item async for item in previous_result]
@@ -361,7 +363,7 @@ class SQLAlchemyOperationsHandler:
             # Emit before event for regular search mode
             if self._storage is not None:
                 from haolib.storages.events.operations import BeforePatchEvent  # noqa: PLC0415
-                
+
                 before_event = BeforePatchEvent(
                     component=self._storage,
                     operation=operation,
@@ -466,7 +468,7 @@ class SQLAlchemyOperationsHandler:
         # Emit after event
         if self._storage is not None:
             from haolib.storages.events.operations import AfterPatchEvent  # noqa: PLC0415
-            
+
             after_event = AfterPatchEvent(
                 component=self._storage,
                 operation=operation,
@@ -479,7 +481,7 @@ class SQLAlchemyOperationsHandler:
 
     async def execute_update[T_Data](
         self,
-        operation: "UpdateOperation[T_Data]",
+        operation: UpdateOperation[T_Data],
         transaction: SQLAlchemyStorageTransaction,
         previous_result: Any | None = None,
     ) -> list[T_Data]:
@@ -506,7 +508,7 @@ class SQLAlchemyOperationsHandler:
             # Emit before event for pipeline mode
             if self._storage is not None:
                 from haolib.storages.events.operations import BeforeUpdateEvent  # noqa: PLC0415
-                
+
                 before_event = BeforeUpdateEvent(
                     component=self._storage,
                     operation=operation,
@@ -515,7 +517,7 @@ class SQLAlchemyOperationsHandler:
                 await self._storage.events.emit(before_event)
             # Pipeline mode: use previous_result
             from collections.abc import AsyncIterator  # noqa: PLC0415
-            
+
             # Collect items from previous_result
             if isinstance(previous_result, AsyncIterator):
                 items = [item async for item in previous_result]
@@ -704,7 +706,7 @@ class SQLAlchemyOperationsHandler:
         # Emit after event
         if self._storage is not None:
             from haolib.storages.events.operations import AfterUpdateEvent  # noqa: PLC0415
-            
+
             after_event = AfterUpdateEvent(
                 component=self._storage,
                 operation=operation,
@@ -717,7 +719,7 @@ class SQLAlchemyOperationsHandler:
 
     async def execute_delete[T_Data](
         self,
-        operation: "DeleteOperation[T_Data]",
+        operation: DeleteOperation[T_Data],
         transaction: SQLAlchemyStorageTransaction,
         previous_result: Any | None = None,
     ) -> int:
@@ -739,7 +741,7 @@ class SQLAlchemyOperationsHandler:
         # Emit before event
         if self._storage is not None:
             from haolib.storages.events.operations import BeforeDeleteEvent  # noqa: PLC0415
-            
+
             before_event = BeforeDeleteEvent(
                 component=self._storage,
                 operation=operation,
@@ -753,7 +755,7 @@ class SQLAlchemyOperationsHandler:
         if previous_result is not None:
             # Pipeline mode: use previous_result
             from collections.abc import AsyncIterator  # noqa: PLC0415
-            
+
             # Collect items from previous_result
             if isinstance(previous_result, AsyncIterator):
                 items = [item async for item in previous_result]
@@ -861,7 +863,7 @@ class SQLAlchemyOperationsHandler:
             # Emit after event
             if self._storage is not None:
                 from haolib.storages.events.operations import AfterDeleteEvent  # noqa: PLC0415
-                
+
                 after_event = AfterDeleteEvent(
                     component=self._storage,
                     operation=operation,
@@ -886,7 +888,7 @@ class SQLAlchemyOperationsHandler:
         # Emit after event
         if self._storage is not None:
             from haolib.storages.events.operations import AfterDeleteEvent  # noqa: PLC0415
-            
+
             after_event = AfterDeleteEvent(
                 component=self._storage,
                 operation=operation,
@@ -899,7 +901,7 @@ class SQLAlchemyOperationsHandler:
 
     async def execute_filter[T_Data](
         self,
-        operation: "FilterOperation[T_Data]",
+        operation: FilterOperation[T_Data],
         transaction: SQLAlchemyStorageTransaction,
         previous_result: Any,
     ) -> list[T_Data]:
@@ -917,7 +919,7 @@ class SQLAlchemyOperationsHandler:
         # Emit before event
         if self._storage is not None:
             from haolib.storages.events.operations import BeforeFilterEvent  # noqa: PLC0415
-            
+
             before_event = BeforeFilterEvent(
                 component=self._storage,
                 operation=operation,
@@ -937,7 +939,7 @@ class SQLAlchemyOperationsHandler:
         # Emit after event
         if self._storage is not None:
             from haolib.storages.events.operations import AfterFilterEvent  # noqa: PLC0415
-            
+
             after_event = AfterFilterEvent(
                 component=self._storage,
                 operation=operation,
@@ -950,7 +952,7 @@ class SQLAlchemyOperationsHandler:
 
     async def execute_map[T_Data, T_Result](
         self,
-        operation: "MapOperation[T_Data, T_Result]",
+        operation: MapOperation[T_Data, T_Result],
         transaction: SQLAlchemyStorageTransaction,
         previous_result: Any,
     ) -> list[T_Result]:
@@ -968,7 +970,7 @@ class SQLAlchemyOperationsHandler:
         # Emit before event
         if self._storage is not None:
             from haolib.storages.events.operations import BeforeMapEvent  # noqa: PLC0415
-            
+
             before_event = BeforeMapEvent(
                 component=self._storage,
                 operation=operation,
@@ -992,7 +994,7 @@ class SQLAlchemyOperationsHandler:
         # Emit after event
         if self._storage is not None:
             from haolib.storages.events.operations import AfterMapEvent  # noqa: PLC0415
-            
+
             after_event = AfterMapEvent(
                 component=self._storage,
                 operation=operation,
@@ -1005,7 +1007,7 @@ class SQLAlchemyOperationsHandler:
 
     async def execute_reduce[T_Data, T_Result](
         self,
-        operation: "ReduceOperation[T_Data, T_Result]",
+        operation: ReduceOperation[T_Data, T_Result],
         transaction: SQLAlchemyStorageTransaction,
         previous_result: Any,
     ) -> T_Result:
@@ -1023,7 +1025,7 @@ class SQLAlchemyOperationsHandler:
         # Emit before event
         if self._storage is not None:
             from haolib.storages.events.operations import BeforeReduceEvent  # noqa: PLC0415
-            
+
             before_event = BeforeReduceEvent(
                 component=self._storage,
                 operation=operation,
@@ -1046,7 +1048,7 @@ class SQLAlchemyOperationsHandler:
         # Emit after event
         if self._storage is not None:
             from haolib.storages.events.operations import AfterReduceEvent  # noqa: PLC0415
-            
+
             after_event = AfterReduceEvent(
                 component=self._storage,
                 operation=operation,
@@ -1059,7 +1061,7 @@ class SQLAlchemyOperationsHandler:
 
     async def execute_transform[T_Data, T_Result](
         self,
-        operation: "TransformOperation[T_Data, T_Result]",
+        operation: TransformOperation[T_Data, T_Result],
         transaction: SQLAlchemyStorageTransaction,
         previous_result: Any,
     ) -> T_Result:
@@ -1077,7 +1079,7 @@ class SQLAlchemyOperationsHandler:
         # Emit before event
         if self._storage is not None:
             from haolib.storages.events.operations import BeforeTransformEvent  # noqa: PLC0415
-            
+
             before_event = BeforeTransformEvent(
                 component=self._storage,
                 operation=operation,
@@ -1092,7 +1094,7 @@ class SQLAlchemyOperationsHandler:
         # Emit after event
         if self._storage is not None:
             from haolib.storages.events.operations import AfterTransformEvent  # noqa: PLC0415
-            
+
             after_event = AfterTransformEvent(
                 component=self._storage,
                 operation=operation,

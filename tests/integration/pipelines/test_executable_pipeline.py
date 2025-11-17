@@ -11,8 +11,8 @@ from haolib.database.files.s3.clients.abstract import (
     S3BucketAlreadyExistsClientException,
     S3BucketAlreadyOwnedByYouClientException,
 )
-from haolib.storages.data_types.registry import DataTypeRegistry
 from haolib.pipelines import filtero, mapo, reduceo, transformo
+from haolib.storages.data_types.registry import DataTypeRegistry
 from haolib.storages.indexes.params import ParamIndex
 from haolib.storages.s3 import S3Storage
 from haolib.storages.sqlalchemy import SQLAlchemyStorage
@@ -81,7 +81,11 @@ class TestExecutablePipeline:
         pipeline = (
             sql_storage.read(ParamIndex(User)).returning()  # Read all users
             | reduceo(lambda acc, u: acc + u.age, 0)
-            | transformo(lambda total_list: str(total_list[0]).encode() if isinstance(total_list, list) and len(total_list) == 1 else str(total_list).encode())
+            | transformo(
+                lambda total_list: str(total_list[0]).encode()
+                if isinstance(total_list, list) and len(total_list) == 1
+                else str(total_list).encode()
+            )
             | s3_storage.create()  # Uses previous_result
         )
 
@@ -113,7 +117,11 @@ class TestExecutablePipeline:
         pipeline = (
             sql_storage.read(ParamIndex(User)).returning()
             | reduceo(lambda acc, u: acc + u.age, 0)
-            | transformo(lambda total_list: str(total_list[0]).encode() if isinstance(total_list, list) and len(total_list) == 1 else str(total_list).encode())
+            | transformo(
+                lambda total_list: str(total_list[0]).encode()
+                if isinstance(total_list, list) and len(total_list) == 1
+                else str(total_list).encode()
+            )
             | s3_storage.create()  # Uses previous_result
         )
 

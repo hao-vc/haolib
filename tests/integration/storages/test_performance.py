@@ -126,7 +126,9 @@ class TestLoadPerformance:
         await real_sqlalchemy_storage.create(users).execute()
 
         index = ParamIndex(data_type=User)
-        pipeline = real_sqlalchemy_storage.read(index).returning() | filtero(lambda u: FILTER_MIN_AGE <= u.age <= FILTER_MAX_AGE)
+        pipeline = real_sqlalchemy_storage.read(index).returning() | filtero(
+            lambda u: FILTER_MIN_AGE <= u.age <= FILTER_MAX_AGE
+        )
 
         async def filter_users() -> Any:
             return await real_sqlalchemy_storage.execute(pipeline)
@@ -148,7 +150,11 @@ class TestLoadPerformance:
         await real_sqlalchemy_storage.create(users).execute()
 
         index = ParamIndex(data_type=User)
-        pipeline = real_sqlalchemy_storage.read(index).returning() | filtero(lambda u: u.age >= FILTER_MIN_AGE) | mapo(lambda u, _idx: u.name)
+        pipeline = (
+            real_sqlalchemy_storage.read(index).returning()
+            | filtero(lambda u: u.age >= FILTER_MIN_AGE)
+            | mapo(lambda u, _idx: u.name)
+        )
 
         async def execute_pipeline() -> Any:
             return await real_sqlalchemy_storage.execute(pipeline)

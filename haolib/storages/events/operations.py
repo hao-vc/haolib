@@ -38,7 +38,7 @@ class BeforeCreateEvent:
     """Event emitted before create operation."""
 
     component: AbstractStorage
-    operation: "CreateOperation[Any]"
+    operation: CreateOperation[Any]
     transaction: Transaction | None = None
     identifier: str = "storage.before_create"
 
@@ -55,7 +55,7 @@ class AfterCreateEvent:
     """Event emitted after create operation."""
 
     component: AbstractStorage
-    operation: "CreateOperation[Any]"
+    operation: CreateOperation[Any]
     result: list[Any]
     transaction: Transaction | None = None
     identifier: str = "storage.after_create"
@@ -74,7 +74,7 @@ class BeforeReadEvent:
     """Event emitted before read operation."""
 
     component: AbstractStorage
-    operation: "ReadOperation[Any]"
+    operation: ReadOperation[Any]
     transaction: Transaction | None = None
     identifier: str = "storage.before_read"
 
@@ -91,7 +91,7 @@ class AfterReadEvent:
     """Event emitted after read operation."""
 
     component: AbstractStorage
-    operation: "ReadOperation[Any]"
+    operation: ReadOperation[Any]
     result: Any  # AsyncIterator
     transaction: Transaction | None = None
     identifier: str = "storage.after_read"
@@ -110,7 +110,7 @@ class BeforePatchEvent:
     """Event emitted before patch operation."""
 
     component: AbstractStorage
-    operation: "PatchOperation[Any]"
+    operation: PatchOperation[Any]
     transaction: Transaction | None = None
     identifier: str = "storage.before_patch"
 
@@ -127,7 +127,7 @@ class AfterPatchEvent:
     """Event emitted after patch operation."""
 
     component: AbstractStorage
-    operation: "PatchOperation[Any]"
+    operation: PatchOperation[Any]
     result: list[Any]
     transaction: Transaction | None = None
     identifier: str = "storage.after_patch"
@@ -146,7 +146,7 @@ class BeforeUpdateEvent:
     """Event emitted before update operation."""
 
     component: AbstractStorage
-    operation: "UpdateOperation[Any]"
+    operation: UpdateOperation[Any]
     transaction: Transaction | None = None
     identifier: str = "storage.before_update"
 
@@ -163,7 +163,7 @@ class AfterUpdateEvent:
     """Event emitted after update operation."""
 
     component: AbstractStorage
-    operation: "UpdateOperation[Any]"
+    operation: UpdateOperation[Any]
     result: list[Any]
     transaction: Transaction | None = None
     identifier: str = "storage.after_update"
@@ -182,7 +182,7 @@ class BeforeDeleteEvent:
     """Event emitted before delete operation."""
 
     component: AbstractStorage
-    operation: "DeleteOperation[Any]"
+    operation: DeleteOperation[Any]
     transaction: Transaction | None = None
     identifier: str = "storage.before_delete"
 
@@ -199,7 +199,7 @@ class AfterDeleteEvent:
     """Event emitted after delete operation."""
 
     component: AbstractStorage
-    operation: "DeleteOperation[Any]"
+    operation: DeleteOperation[Any]
     result: int
     transaction: Transaction | None = None
     identifier: str = "storage.after_delete"
@@ -218,7 +218,7 @@ class BeforeFilterEvent:
     """Event emitted before filter operation."""
 
     component: AbstractStorage
-    operation: "FilterOperation[Any]"
+    operation: FilterOperation[Any]
     input_data: Any
     transaction: Transaction | None = None
     identifier: str = "storage.before_filter"
@@ -236,7 +236,7 @@ class AfterFilterEvent:
     """Event emitted after filter operation."""
 
     component: AbstractStorage
-    operation: "FilterOperation[Any]"
+    operation: FilterOperation[Any]
     result: list[Any]
     transaction: Transaction | None = None
     identifier: str = "storage.after_filter"
@@ -255,7 +255,7 @@ class BeforeMapEvent:
     """Event emitted before map operation."""
 
     component: AbstractStorage
-    operation: "MapOperation[Any, Any]"
+    operation: MapOperation[Any, Any]
     input_data: Any
     transaction: Transaction | None = None
     identifier: str = "storage.before_map"
@@ -273,7 +273,7 @@ class AfterMapEvent:
     """Event emitted after map operation."""
 
     component: AbstractStorage
-    operation: "MapOperation[Any, Any]"
+    operation: MapOperation[Any, Any]
     result: list[Any]
     transaction: Transaction | None = None
     identifier: str = "storage.after_map"
@@ -292,7 +292,7 @@ class BeforeReduceEvent:
     """Event emitted before reduce operation."""
 
     component: AbstractStorage
-    operation: "ReduceOperation[Any, Any]"
+    operation: ReduceOperation[Any, Any]
     input_data: Any
     transaction: Transaction | None = None
     identifier: str = "storage.before_reduce"
@@ -310,7 +310,7 @@ class AfterReduceEvent:
     """Event emitted after reduce operation."""
 
     component: AbstractStorage
-    operation: "ReduceOperation[Any, Any]"
+    operation: ReduceOperation[Any, Any]
     result: Any
     transaction: Transaction | None = None
     identifier: str = "storage.after_reduce"
@@ -329,7 +329,7 @@ class BeforeTransformEvent:
     """Event emitted before transform operation."""
 
     component: AbstractStorage
-    operation: "TransformOperation[Any, Any]"
+    operation: TransformOperation[Any, Any]
     input_data: Any
     transaction: Transaction | None = None
     identifier: str = "storage.before_transform"
@@ -347,7 +347,7 @@ class AfterTransformEvent:
     """Event emitted after transform operation."""
 
     component: AbstractStorage
-    operation: "TransformOperation[Any, Any]"
+    operation: TransformOperation[Any, Any]
     result: Any
     transaction: Transaction | None = None
     identifier: str = "storage.after_transform"

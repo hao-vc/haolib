@@ -28,12 +28,14 @@ if TYPE_CHECKING:
         UpdateOperation,
     )
 
+
 # For runtime, import lazily to avoid circular import
 def __getattr__(name: str) -> Any:
     """Lazy import for backward compatibility."""
-    import haolib.pipelines as pipelines  # noqa: PLC0415
-    
+    from haolib import pipelines  # noqa: PLC0415
+
     return getattr(pipelines, name)
+
 
 __all__ = [
     "CreateOperation",
@@ -57,18 +59,21 @@ __all__ = [
     "UpdateOperation",
 ]
 
+
 # Import SQLAlchemyPipelineOptimizer lazily to avoid circular dependency
 def _get_sqlalchemy_optimizer() -> Any:
     """Lazy import for SQLAlchemyPipelineOptimizer."""
     from haolib.storages.operations.optimizer.sqlalchemy import SQLAlchemyPipelineOptimizer  # noqa: PLC0415
+
     return SQLAlchemyPipelineOptimizer
+
 
 # Make SQLAlchemyPipelineOptimizer available via __getattr__
 def __getattr__(name: str) -> Any:
     """Lazy import for backward compatibility."""
     if name == "SQLAlchemyPipelineOptimizer":
         return _get_sqlalchemy_optimizer()
-    
-    import haolib.pipelines as pipelines  # noqa: PLC0415
-    
+
+    from haolib import pipelines  # noqa: PLC0415
+
     return getattr(pipelines, name)

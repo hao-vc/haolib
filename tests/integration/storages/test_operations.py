@@ -447,7 +447,12 @@ class TestStorageOperations:
 
         # Update user (partial update)
         index = ParamIndex(data_type=User, id=user_id)
-        updated = await sqlalchemy_storage.read(index).patch({"age": GRACE_UPDATED_AGE, "name": "Eve Updated"}).returning().execute()
+        updated = (
+            await sqlalchemy_storage.read(index)
+            .patch({"age": GRACE_UPDATED_AGE, "name": "Eve Updated"})
+            .returning()
+            .execute()
+        )
 
         assert len(updated) == SINGLE_USER_COUNT
         assert updated[0].name == "Eve Updated"
@@ -540,7 +545,9 @@ class TestStorageOperations:
         # Transform to list of emails
         # Pipeline: read -> transform (transform needs previous result from pipeline)
         index = ParamIndex(data_type=User)
-        pipeline = sqlalchemy_storage.read(index).returning() | transformo(transformer=lambda users: [u.email for u in users])
+        pipeline = sqlalchemy_storage.read(index).returning() | transformo(
+            transformer=lambda users: [u.email for u in users]
+        )
         emails = await pipeline.execute()
 
         assert len(emails) >= MIN_USERS_COUNT
@@ -657,7 +664,9 @@ class TestStorageOperations:
         pipeline = (
             sqlalchemy_storage.read(index).returning()
             | mapo(lambda u, idx: u)
-            | sqlalchemy_storage.update(data=lambda u: User(id=u.id, name=u.name + "_updated", age=u.age, email=u.email))
+            | sqlalchemy_storage.update(
+                data=lambda u: User(id=u.id, name=u.name + "_updated", age=u.age, email=u.email)
+            )
         )
 
         updated = await pipeline.execute()

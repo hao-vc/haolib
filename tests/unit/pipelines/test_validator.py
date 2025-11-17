@@ -4,9 +4,8 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from haolib.pipelines import filtero, mapo, reduceo, transformo
+from haolib.pipelines import PipelineValidationError, PipelineValidator, filtero, mapo, reduceo, transformo
 from haolib.pipelines.operations import CreateOperation, ReadOperation
-from haolib.pipelines import PipelineValidationError, PipelineValidator
 from haolib.storages.indexes.params import ParamIndex
 from haolib.storages.targets.abstract import AbstractDataTarget
 from tests.integration.storages.conftest import User
@@ -42,14 +41,10 @@ class TestPipelineValidator:
         # the validation logic, not the fluent API
         from haolib.pipelines.base import TargetBoundOperation
         from haolib.pipelines.operations import CreateOperation, ReadOperation
-        
+
         read_op = TargetBoundOperation(operation=ReadOperation(search_index=ParamIndex(User)), target=mock_storage)
         create_op = TargetBoundOperation(operation=CreateOperation(data=[lambda users: users]), target=mock_storage)
-        pipeline: Pipeline[Any, Any, Any] = (
-            read_op
-            | filtero(lambda u: u.age >= 18)
-            | create_op
-        )
+        pipeline: Pipeline[Any, Any, Any] = read_op | filtero(lambda u: u.age >= 18) | create_op
 
         validator = PipelineValidator()
         # Should not raise
@@ -84,7 +79,7 @@ class TestPipelineValidator:
         """Test validation passes when create receives previous result."""
         # Valid: create receives previous result from filter
         from haolib.pipelines.base import TargetBoundOperation
-        
+
         pipeline: Pipeline[Any, Any, Any] = (
             TargetBoundOperation(operation=ReadOperation(search_index=ParamIndex(User)), target=mock_storage)
             | filtero(lambda u: u.age >= 18)
@@ -197,9 +192,9 @@ class TestPipelineValidator:
         from haolib.pipelines.base import Pipeline, TargetBoundOperation
 
         # Valid pipeline
-        pipeline: Pipeline[Any, Any, Any] = TargetBoundOperation(operation=ReadOperation(search_index=ParamIndex(User)), target=mock_storage) | filtero(
-            lambda u: u.age >= 18
-        )
+        pipeline: Pipeline[Any, Any, Any] = TargetBoundOperation(
+            operation=ReadOperation(search_index=ParamIndex(User)), target=mock_storage
+        ) | filtero(lambda u: u.age >= 18)
 
         # Should not raise
         pipeline.validate()
@@ -222,7 +217,8 @@ class TestPipelineValidator:
 
         # Invalid: map requires previous result but is bound to target
         pipeline: Pipeline[Any, Any, Any] = (
-            TargetBoundOperation(operation=ReadOperation(search_index=ParamIndex(User)), target=mock_storage) | mapo(lambda u, _idx: u.name) ^ mock_storage
+            TargetBoundOperation(operation=ReadOperation(search_index=ParamIndex(User)), target=mock_storage)
+            | mapo(lambda u, _idx: u.name) ^ mock_storage
         )
 
         validator = PipelineValidator()
@@ -239,7 +235,8 @@ class TestPipelineValidator:
 
         # Invalid: filter requires previous result but is bound to target
         pipeline: Pipeline[Any, Any, Any] = (
-            TargetBoundOperation(operation=ReadOperation(search_index=ParamIndex(User)), target=mock_storage) | filtero(lambda u: u.age >= 18) ^ mock_storage
+            TargetBoundOperation(operation=ReadOperation(search_index=ParamIndex(User)), target=mock_storage)
+            | filtero(lambda u: u.age >= 18) ^ mock_storage
         )
 
         validator = PipelineValidator()
@@ -255,7 +252,8 @@ class TestPipelineValidator:
 
         # Invalid: reduce requires previous result but is bound to target
         pipeline: Pipeline[Any, Any, Any] = (
-            TargetBoundOperation(operation=ReadOperation(search_index=ParamIndex(User)), target=mock_storage) | reduceo(lambda acc, u: acc + u.age, 0) ^ mock_storage
+            TargetBoundOperation(operation=ReadOperation(search_index=ParamIndex(User)), target=mock_storage)
+            | reduceo(lambda acc, u: acc + u.age, 0) ^ mock_storage
         )
 
         validator = PipelineValidator()

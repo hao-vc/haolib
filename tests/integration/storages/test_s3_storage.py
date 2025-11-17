@@ -14,8 +14,8 @@ from haolib.database.files.s3.clients.abstract import (
     S3BucketAlreadyOwnedByYouClientException,
     S3NoSuchKeyClientException,
 )
-from haolib.storages.data_types.registry import DataTypeRegistry
 from haolib.pipelines import filtero, mapo
+from haolib.storages.data_types.registry import DataTypeRegistry
 from haolib.storages.indexes.path import PathIndex
 from haolib.storages.s3 import S3Storage
 from tests.integration.storages.conftest import BUCKET_NAME, User

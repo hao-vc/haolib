@@ -2,9 +2,9 @@
 
 import pytest
 
+from haolib.pipelines.base import Pipeline
 from haolib.pipelines.context import PipelineContext
 from haolib.pipelines.operations import CreateOperation, ReadOperation
-from haolib.pipelines.base import Pipeline
 
 
 class TestPipelineContext:
@@ -118,4 +118,3 @@ class TestPipelineContext:
             target_operations=target_operations,
         )
         assert context_at_pos_1.will_return_to_target(target) is False
-

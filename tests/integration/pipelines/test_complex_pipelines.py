@@ -22,8 +22,8 @@ from haolib.database.files.s3.clients.abstract import (
     S3BucketAlreadyOwnedByYouClientException,
 )
 from haolib.database.files.s3.clients.pydantic import S3DeleteObjectsDelete, S3DeleteObjectsDeleteObject
-from haolib.storages.data_types.registry import DataTypeRegistry
 from haolib.pipelines import filtero, mapo, reduceo, transformo
+from haolib.storages.data_types.registry import DataTypeRegistry
 from haolib.storages.indexes.params import ParamIndex
 from haolib.storages.indexes.path import PathIndex
 from haolib.storages.indexes.sql import SQLQueryIndex
@@ -226,7 +226,9 @@ class TestComplexPipelines:
 
         # Create -> Filter -> Count (without creating again to avoid unique constraint)
         result = await (
-            sqlalchemy_storage.create(users).returning() | filtero(lambda u: u.age >= 30) | reduceo(lambda acc, u: acc + 1, 0)
+            sqlalchemy_storage.create(users).returning()
+            | filtero(lambda u: u.age >= 30)
+            | reduceo(lambda acc, u: acc + 1, 0)
         ).execute()
 
         assert result == 1  # Only Bob
@@ -412,9 +414,12 @@ class TestComplexPipelines:
         await sqlalchemy_storage.create(users).returning().execute()
 
         # Update with SQLQueryIndex (use patcho for partial update)
-        result = await sqlalchemy_storage.read(
-            SQLQueryIndex(query=select(UserModel).where(UserModel.age >= 30))
-        ).patch({"age": 31}).returning().execute()
+        result = (
+            await sqlalchemy_storage.read(SQLQueryIndex(query=select(UserModel).where(UserModel.age >= 30)))
+            .patch({"age": 31})
+            .returning()
+            .execute()
+        )
 
         assert len(result) == 1
         assert result[0].age == 31
@@ -435,9 +440,11 @@ class TestComplexPipelines:
         await sqlalchemy_storage.create(users).returning().execute()
 
         # Delete with SQLQueryIndex
-        deleted_count = await sqlalchemy_storage.read(
-            SQLQueryIndex(query=select(UserModel).where(UserModel.age >= 30))
-        ).delete().execute()
+        deleted_count = (
+            await sqlalchemy_storage.read(SQLQueryIndex(query=select(UserModel).where(UserModel.age >= 30)))
+            .delete()
+            .execute()
+        )
 
         assert deleted_count == 2  # Bob and Charlie
 
@@ -589,9 +596,12 @@ class TestComplexPipelines:
         assert result is not None
         assert result.age == 25
         # Update separately (use patcho for partial update)
-        updated = await sqlalchemy_storage.read(
-            ParamIndex(User, email="alice@example.com")
-        ).patch({"age": 26}).returning().execute()
+        updated = (
+            await sqlalchemy_storage.read(ParamIndex(User, email="alice@example.com"))
+            .patch({"age": 26})
+            .returning()
+            .execute()
+        )
         assert updated[0].age == 26
 
     @pytest.mark.asyncio
@@ -654,7 +664,9 @@ class TestComplexPipelines:
 
         # Create -> Map (age) -> Reduce (sum) -> Transform (calculate stats)
         total = await (
-            sqlalchemy_storage.create(users).returning() | mapo(lambda u, _idx: u.age) | reduceo(lambda acc, age: acc + age, 0)
+            sqlalchemy_storage.create(users).returning()
+            | mapo(lambda u, _idx: u.age)
+            | reduceo(lambda acc, age: acc + age, 0)
         ).execute()
 
         assert total == 90

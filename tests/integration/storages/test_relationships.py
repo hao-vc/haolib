@@ -12,9 +12,9 @@ import pytest_asyncio
 from sqlalchemy import text
 from sqlalchemy.orm import Mapped, mapped_column
 
+from haolib.pipelines.operations import CreateOperation, PatchOperation, UpdateOperation
 from haolib.storages.data_types.registry import DataTypeRegistry
 from haolib.storages.indexes.params import ParamIndex
-from haolib.pipelines.operations import CreateOperation, PatchOperation, UpdateOperation
 from haolib.storages.operations.sqlalchemy import SQLAlchemyOperationsHandler
 from tests.integration.conftest import MockAppConfig
 from tests.integration.storages.conftest import Base, User, UserModel

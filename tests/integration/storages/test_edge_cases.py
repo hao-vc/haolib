@@ -634,7 +634,10 @@ class TestSQLAlchemyExecutorEdgeCases:
             txn = sqlalchemy_storage._begin_transaction()
             async with txn:
                 from haolib.pipelines.operations import CreateOperation
-                await sqlalchemy_storage._executor._execute_operation(CreateOperation(data=users), txn, previous_result=[1, 2, 3])
+
+                await sqlalchemy_storage._executor._execute_operation(
+                    CreateOperation(data=users), txn, previous_result=[1, 2, 3]
+                )
 
     @pytest.mark.asyncio
     async def test_execute_read_with_previous_result_error(self, sqlalchemy_storage: Any) -> None:
@@ -645,6 +648,7 @@ class TestSQLAlchemyExecutorEdgeCases:
             txn = sqlalchemy_storage._begin_transaction()
             async with txn:
                 from haolib.pipelines.operations import ReadOperation
+
                 await sqlalchemy_storage._executor._execute_operation(
                     ReadOperation(search_index=index), txn, previous_result=[1, 2, 3]
                 )
@@ -663,6 +667,7 @@ class TestSQLAlchemyExecutorEdgeCases:
             txn = sqlalchemy_storage._begin_transaction()
             async with txn:
                 from haolib.pipelines.operations import PatchOperation
+
                 await sqlalchemy_storage._executor._execute_operation(
                     PatchOperation(search_index=index, patch={"name": "Updated"}),
                     txn,
@@ -683,8 +688,11 @@ class TestSQLAlchemyExecutorEdgeCases:
             txn = sqlalchemy_storage._begin_transaction()
             async with txn:
                 from haolib.pipelines.operations import DeleteOperation
+
                 await sqlalchemy_storage._executor._execute_operation(
-                    DeleteOperation(search_index=index), txn, previous_result=[1, 2, 3]  # Incompatible type (int instead of User)
+                    DeleteOperation(search_index=index),
+                    txn,
+                    previous_result=[1, 2, 3],  # Incompatible type (int instead of User)
                 )
 
     @pytest.mark.asyncio

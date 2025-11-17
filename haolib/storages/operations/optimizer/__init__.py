@@ -10,12 +10,14 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from haolib.pipelines import PipelineAnalysis, PipelineOptimizer
 
+
 # For runtime, import lazily to avoid circular import
 def __getattr__(name: str) -> Any:
     """Lazy import for backward compatibility."""
-    import haolib.pipelines as pipelines  # noqa: PLC0415
-    
+    from haolib import pipelines  # noqa: PLC0415
+
     return getattr(pipelines, name)
+
 
 __all__ = [
     "PipelineAnalysis",
