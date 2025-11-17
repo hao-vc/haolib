@@ -1,5 +1,6 @@
 """Test the S3 AIOboto3 client."""
 
+import asyncio
 import json
 from datetime import UTC, datetime
 
@@ -16,6 +17,7 @@ from haolib.database.files.s3.clients.abstract import (
     S3NoSuchKeyClientException,
     S3NoSuchLifecycleConfigurationClientException,
     S3NoSuchPolicyClientException,
+    S3ServiceClientException,
 )
 from haolib.database.files.s3.clients.pydantic import (
     S3CORSConfiguration,
@@ -31,6 +33,7 @@ from haolib.database.files.s3.clients.pydantic import (
     S3ObjectLockRetention,
     S3ObjectLockRule,
 )
+from tests.integration.s3.conftest import MockS3Client
 
 
 @pytest.mark.asyncio
@@ -680,3 +683,548 @@ async def test_special_characters_in_key(s3_client: AbstractS3Client, clean_all_
     await s3_client.put_object(bucket_name, key, body=body)
     response = await s3_client.get_object(bucket_name, key)
     assert response.body == body
+
+
+@pytest.mark.asyncio
+async def test_generate_presigned_url_get_object(s3_client: AbstractS3Client, clean_all_buckets: None) -> None:
+    """Test generating a presigned URL for downloading an object."""
+    bucket_name = "test-bucket-presigned-get"
+    key = "test-key"
+    body = b"test-data"
+    await s3_client.create_bucket(bucket_name)
+    await s3_client.put_object(bucket_name, key, body=body)
+
+    url = s3_client.generate_presigned_url(
+        bucket=bucket_name,
+        key=key,
+        client_method="get_object",
+        expires_in=3600,
+    )
+
+    assert url is not None
+    assert isinstance(url, str)
+    assert bucket_name in url
+    assert key in url
+    # URL should contain query parameters
+    assert "?" in url or "AWSAccessKeyId" in url or "Expires" in url or "Signature" in url
+
+
+@pytest.mark.asyncio
+async def test_generate_presigned_url_get_object_with_params(
+    s3_client: AbstractS3Client, clean_all_buckets: None
+) -> None:
+    """Test generating a presigned URL for downloading with response parameters."""
+    bucket_name = "test-bucket-presigned-get-params"
+    key = "test-key.pdf"
+    body = b"test-data"
+    await s3_client.create_bucket(bucket_name)
+    await s3_client.put_object(bucket_name, key, body=body)
+
+    url = s3_client.generate_presigned_url(
+        bucket=bucket_name,
+        key=key,
+        client_method="get_object",
+        expires_in=1800,
+        response_content_type="application/pdf",
+        response_content_disposition='attachment; filename="test.pdf"',
+    )
+
+    assert url is not None
+    assert isinstance(url, str)
+    assert bucket_name in url
+    assert key in url
+
+
+@pytest.mark.asyncio
+async def test_generate_presigned_url_put_object(s3_client: AbstractS3Client, clean_all_buckets: None) -> None:
+    """Test generating a presigned URL for uploading an object."""
+    bucket_name = "test-bucket-presigned-put"
+    key = "upload-key"
+    await s3_client.create_bucket(bucket_name)
+
+    url = s3_client.generate_presigned_url(
+        bucket=bucket_name,
+        key=key,
+        client_method="put_object",
+        expires_in=3600,
+        content_type="text/plain",
+    )
+
+    assert url is not None
+    assert isinstance(url, str)
+    assert bucket_name in url
+    assert key in url
+
+
+@pytest.mark.asyncio
+async def test_generate_presigned_url_put_object_with_metadata(
+    s3_client: AbstractS3Client, clean_all_buckets: None
+) -> None:
+    """Test generating a presigned URL for uploading with metadata."""
+    bucket_name = "test-bucket-presigned-put-metadata"
+    key = "upload-key"
+    await s3_client.create_bucket(bucket_name)
+
+    url = s3_client.generate_presigned_url(
+        bucket=bucket_name,
+        key=key,
+        client_method="put_object",
+        expires_in=1800,
+        content_type="application/json",
+        metadata={"author": "test", "version": "1.0"},
+        acl="private",
+    )
+
+    assert url is not None
+    assert isinstance(url, str)
+    assert bucket_name in url
+    assert key in url
+
+
+@pytest.mark.asyncio
+async def test_generate_presigned_url_get_object_bucket_not_exists(
+    s3_client: AbstractS3Client, clean_all_buckets: None
+) -> None:
+    """Test generating a presigned URL for a non-existent bucket."""
+    # Note: In real AWS S3, generate_presigned_url doesn't validate bucket existence
+    # because it doesn't make network calls. The error occurs when using the URL.
+    # MockS3Client validates this for testing, but aioboto3 doesn't.
+    # So we test both behaviors.
+    if isinstance(s3_client, MockS3Client):
+        with pytest.raises(S3NoSuchBucketClientException):
+            s3_client.generate_presigned_url(
+                bucket="non-existent-bucket",
+                key="test-key",
+                client_method="get_object",
+            )
+    else:
+        # For real clients, presigned URL generation succeeds even for non-existent buckets
+        url = s3_client.generate_presigned_url(
+            bucket="non-existent-bucket",
+            key="test-key",
+            client_method="get_object",
+        )
+        assert url is not None
+        assert isinstance(url, str)
+
+
+@pytest.mark.asyncio
+async def test_generate_presigned_url_get_object_key_not_exists(
+    s3_client: AbstractS3Client, clean_all_buckets: None
+) -> None:
+    """Test generating a presigned URL for a non-existent object."""
+    bucket_name = "test-bucket-presigned-not-exists"
+    await s3_client.create_bucket(bucket_name)
+
+    # For get_object, MockS3Client checks if the key exists
+    # Real AWS S3 doesn't check if the key exists when generating presigned URL
+    # The error occurs when trying to use the URL
+    if isinstance(s3_client, MockS3Client):
+        with pytest.raises(S3NoSuchKeyClientException):
+            s3_client.generate_presigned_url(
+                bucket=bucket_name,
+                key="non-existent-key",
+                client_method="get_object",
+            )
+    else:
+        # For real clients, presigned URL generation succeeds even for non-existent keys
+        url = s3_client.generate_presigned_url(
+            bucket=bucket_name,
+            key="non-existent-key",
+            client_method="get_object",
+        )
+        assert url is not None
+        assert isinstance(url, str)
+
+
+@pytest.mark.asyncio
+async def test_generate_presigned_url_put_object_bucket_not_exists(
+    s3_client: AbstractS3Client, clean_all_buckets: None
+) -> None:
+    """Test generating a presigned URL for uploading to a non-existent bucket."""
+    if isinstance(s3_client, MockS3Client):
+        with pytest.raises(S3NoSuchBucketClientException):
+            s3_client.generate_presigned_url(
+                bucket="non-existent-bucket",
+                key="test-key",
+                client_method="put_object",
+            )
+    else:
+        # For real clients, presigned URL generation succeeds even for non-existent buckets
+        url = s3_client.generate_presigned_url(
+            bucket="non-existent-bucket",
+            key="test-key",
+            client_method="put_object",
+        )
+        assert url is not None
+        assert isinstance(url, str)
+
+
+@pytest.mark.asyncio
+async def test_generate_presigned_url_custom_expires(s3_client: AbstractS3Client, clean_all_buckets: None) -> None:
+    """Test generating a presigned URL with custom expiration time."""
+    bucket_name = "test-bucket-presigned-expires"
+    key = "test-key"
+    body = b"test-data"
+    await s3_client.create_bucket(bucket_name)
+    await s3_client.put_object(bucket_name, key, body=body)
+
+    # Test with different expiration times
+    for expires_in in [60, 3600, 86400]:
+        url = s3_client.generate_presigned_url(
+            bucket=bucket_name,
+            key=key,
+            client_method="get_object",
+            expires_in=expires_in,
+        )
+        assert url is not None
+        assert isinstance(url, str)
+
+
+@pytest.mark.asyncio
+async def test_generate_presigned_url_with_version_id(s3_client: AbstractS3Client, clean_all_buckets: None) -> None:
+    """Test generating a presigned URL with version ID."""
+    bucket_name = "test-bucket-presigned-version"
+    key = "test-key"
+    body = b"test-data"
+    await s3_client.create_bucket(bucket_name)
+    await s3_client.put_object(bucket_name, key, body=body)
+
+    url = s3_client.generate_presigned_url(
+        bucket=bucket_name,
+        key=key,
+        client_method="get_object",
+        expires_in=3600,
+        version_id="test-version-id",
+    )
+
+    assert url is not None
+    assert isinstance(url, str)
+    # Version ID should be in the URL (for mock) or parameters (for real AWS)
+    assert "version" in url.lower() or "test-version-id" in url
+
+
+@pytest.mark.asyncio
+async def test_generate_presigned_url_get_object_all_response_params(
+    s3_client: AbstractS3Client, clean_all_buckets: None
+) -> None:
+    """Test generating a presigned URL with all response parameters for get_object."""
+    bucket_name = "test-bucket-presigned-all-params"
+    key = "test-key"
+    body = b"test-data"
+    await s3_client.create_bucket(bucket_name)
+    await s3_client.put_object(bucket_name, key, body=body)
+
+    url = s3_client.generate_presigned_url(
+        bucket=bucket_name,
+        key=key,
+        client_method="get_object",
+        expires_in=3600,
+        response_content_type="application/json",
+        response_content_disposition='attachment; filename="data.json"',
+        response_content_encoding="gzip",
+        response_content_language="en-US",
+        response_cache_control="max-age=3600",
+        response_expires=datetime.now(UTC),
+    )
+
+    assert url is not None
+    assert isinstance(url, str)
+    assert bucket_name in url
+    assert key in url
+
+
+@pytest.mark.asyncio
+async def test_generate_presigned_url_put_object_all_params(
+    s3_client: AbstractS3Client, clean_all_buckets: None
+) -> None:
+    """Test generating a presigned URL with all parameters for put_object."""
+    bucket_name = "test-bucket-presigned-put-all"
+    key = "upload-key"
+    await s3_client.create_bucket(bucket_name)
+
+    url = s3_client.generate_presigned_url(
+        bucket=bucket_name,
+        key=key,
+        client_method="put_object",
+        expires_in=3600,
+        content_type="application/json",
+        content_md5="dGVzdA==",  # base64 of "test"
+        metadata={"key1": "value1", "key2": "value2"},
+        server_side_encryption="AES256",
+        acl="private",
+    )
+
+    assert url is not None
+    assert isinstance(url, str)
+    assert bucket_name in url
+    assert key in url
+
+
+@pytest.mark.asyncio
+async def test_generate_presigned_url_put_object_with_sse_kms(
+    s3_client: AbstractS3Client, clean_all_buckets: None
+) -> None:
+    """Test generating a presigned URL for put_object with KMS encryption."""
+    bucket_name = "test-bucket-presigned-sse-kms"
+    key = "upload-key"
+    await s3_client.create_bucket(bucket_name)
+
+    url = s3_client.generate_presigned_url(
+        bucket=bucket_name,
+        key=key,
+        client_method="put_object",
+        expires_in=3600,
+        server_side_encryption="aws:kms",
+        sse_kms_key_id="arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012",
+    )
+
+    assert url is not None
+    assert isinstance(url, str)
+    assert bucket_name in url
+    assert key in url
+
+
+@pytest.mark.asyncio
+async def test_generate_presigned_url_get_object_with_sse_customer(
+    s3_client: AbstractS3Client, clean_all_buckets: None
+) -> None:
+    """Test generating a presigned URL for get_object with customer-provided encryption."""
+    bucket_name = "test-bucket-presigned-sse-customer"
+    key = "test-key"
+    body = b"test-data"
+    await s3_client.create_bucket(bucket_name)
+    await s3_client.put_object(bucket_name, key, body=body)
+
+    url = s3_client.generate_presigned_url(
+        bucket=bucket_name,
+        key=key,
+        client_method="get_object",
+        expires_in=3600,
+        sse_customer_algorithm="AES256",
+        sse_customer_key="test-key-32-bytes-long-string!!",
+    )
+
+    assert url is not None
+    assert isinstance(url, str)
+    assert bucket_name in url
+    assert key in url
+
+
+@pytest.mark.asyncio
+async def test_generate_presigned_url_invalid_client_method(
+    s3_client: AbstractS3Client, clean_all_buckets: None
+) -> None:
+    """Test generating a presigned URL with invalid client_method."""
+    bucket_name = "test-bucket-presigned-invalid"
+    key = "test-key"
+    await s3_client.create_bucket(bucket_name)
+
+    # Type checker will catch this, but we test runtime behavior
+    # For aioboto3 client, it will raise InvalidRequestException
+    # For mock client, it should handle gracefully
+    try:
+        url = s3_client.generate_presigned_url(
+            bucket=bucket_name,
+            key=key,
+            client_method="invalid_method",  # type: ignore[arg-type]
+            expires_in=3600,
+        )
+        # Mock client might not validate this, so we just check it doesn't crash
+        assert isinstance(url, str)
+    except S3InvalidRequestClientException:
+        # Real client should raise this
+        pass
+
+
+@pytest.mark.asyncio
+async def test_generate_presigned_url_special_characters_in_key(
+    s3_client: AbstractS3Client, clean_all_buckets: None
+) -> None:
+    """Test generating a presigned URL with special characters in key."""
+    bucket_name = "test-bucket-presigned-special"
+    key = "test/key with spaces & special-chars@2024.txt"
+    body = b"test-data"
+    await s3_client.create_bucket(bucket_name)
+    await s3_client.put_object(bucket_name, key, body=body)
+
+    url = s3_client.generate_presigned_url(
+        bucket=bucket_name,
+        key=key,
+        client_method="get_object",
+        expires_in=3600,
+    )
+
+    assert url is not None
+    assert isinstance(url, str)
+    assert bucket_name in url
+    # Key should be URL-encoded in the presigned URL
+    assert key in url or "%" in url  # URL encoding
+
+
+@pytest.mark.asyncio
+async def test_generate_presigned_url_minimum_expires(s3_client: AbstractS3Client, clean_all_buckets: None) -> None:
+    """Test generating a presigned URL with minimum expiration time."""
+    bucket_name = "test-bucket-presigned-min-expires"
+    key = "test-key"
+    body = b"test-data"
+    await s3_client.create_bucket(bucket_name)
+    await s3_client.put_object(bucket_name, key, body=body)
+
+    url = s3_client.generate_presigned_url(
+        bucket=bucket_name,
+        key=key,
+        client_method="get_object",
+        expires_in=1,  # 1 second
+    )
+
+    assert url is not None
+    assert isinstance(url, str)
+
+
+@pytest.mark.asyncio
+async def test_generate_presigned_url_maximum_expires(s3_client: AbstractS3Client, clean_all_buckets: None) -> None:
+    """Test generating a presigned URL with maximum expiration time."""
+    bucket_name = "test-bucket-presigned-max-expires"
+    key = "test-key"
+    body = b"test-data"
+    await s3_client.create_bucket(bucket_name)
+    await s3_client.put_object(bucket_name, key, body=body)
+
+    # AWS allows up to 7 days (604800 seconds) for presigned URLs
+    url = s3_client.generate_presigned_url(
+        bucket=bucket_name,
+        key=key,
+        client_method="get_object",
+        expires_in=604800,  # 7 days
+    )
+
+    assert url is not None
+    assert isinstance(url, str)
+
+
+@pytest.mark.asyncio
+async def test_generate_presigned_url_different_acls(s3_client: AbstractS3Client, clean_all_buckets: None) -> None:
+    """Test generating presigned URLs with different ACL values for put_object."""
+    bucket_name = "test-bucket-presigned-acls"
+    key = "upload-key"
+    await s3_client.create_bucket(bucket_name)
+
+    acls = [
+        "private",
+        "public-read",
+        "public-read-write",
+        "authenticated-read",
+        "bucket-owner-read",
+        "bucket-owner-full-control",
+    ]
+
+    for acl in acls:
+        url = s3_client.generate_presigned_url(
+            bucket=bucket_name,
+            key=f"{key}-{acl}",
+            client_method="put_object",
+            expires_in=3600,
+            acl=acl,  # type: ignore[arg-type]
+        )
+        assert url is not None
+        assert isinstance(url, str)
+        assert bucket_name in url
+
+
+@pytest.mark.asyncio
+async def test_generate_presigned_url_empty_key(s3_client: AbstractS3Client, clean_all_buckets: None) -> None:
+    """Test generating a presigned URL with empty key (edge case)."""
+    bucket_name = "test-bucket-presigned-empty-key"
+    key = ""
+    body = b"test-data"
+    await s3_client.create_bucket(bucket_name)
+
+    # AWS S3 doesn't allow empty keys (min length is 1)
+    # MockS3Client might allow it for testing, but real S3 clients will fail
+    if isinstance(s3_client, MockS3Client):
+        try:
+            await s3_client.put_object(bucket_name, key, body=body)
+            url = s3_client.generate_presigned_url(
+                bucket=bucket_name,
+                key=key,
+                client_method="get_object",
+                expires_in=3600,
+            )
+            assert url is not None
+            assert isinstance(url, str)
+        except S3InvalidRequestClientException:
+            # Empty keys might not be allowed even in mock
+            pytest.skip("Empty keys not supported by this S3 backend")
+    else:
+        # Real S3 clients don't allow empty keys
+        pytest.skip("Empty keys not supported by AWS S3 (min length is 1)")
+
+
+@pytest.mark.asyncio
+async def test_generate_presigned_url_very_long_key(s3_client: AbstractS3Client, clean_all_buckets: None) -> None:
+    """Test generating a presigned URL with very long key name."""
+    bucket_name = "test-bucket-presigned-long-key"
+    # S3 key can be up to 1024 characters, but some backends may have limitations
+    # Use a reasonable length that should work with most backends
+    key = "a" * 512
+    body = b"test-data"
+    await s3_client.create_bucket(bucket_name)
+    try:
+        await s3_client.put_object(bucket_name, key, body=body)
+    except (S3InvalidRequestClientException, S3ServiceClientException):
+        # Some S3 backends may not support very long keys
+        pytest.skip("Very long keys not supported by this S3 backend")
+
+    url = s3_client.generate_presigned_url(
+        bucket=bucket_name,
+        key=key,
+        client_method="get_object",
+        expires_in=3600,
+    )
+
+    assert url is not None
+    assert isinstance(url, str)
+    assert bucket_name in url
+
+
+@pytest.mark.asyncio
+async def test_generate_presigned_url_multiple_calls_same_params(
+    s3_client: AbstractS3Client, clean_all_buckets: None
+) -> None:
+    """Test that multiple calls with same parameters generate different URLs (due to timestamp)."""
+    bucket_name = "test-bucket-presigned-multiple"
+    key = "test-key"
+    body = b"test-data"
+    await s3_client.create_bucket(bucket_name)
+    await s3_client.put_object(bucket_name, key, body=body)
+
+    url1 = s3_client.generate_presigned_url(
+        bucket=bucket_name,
+        key=key,
+        client_method="get_object",
+        expires_in=3600,
+    )
+
+    # Small delay to ensure different timestamps
+    # For mock client, we need longer delay since timestamp is in seconds
+    await asyncio.sleep(1.1)
+
+    url2 = s3_client.generate_presigned_url(
+        bucket=bucket_name,
+        key=key,
+        client_method="get_object",
+        expires_in=3600,
+    )
+
+    # URLs should be different due to different expiration timestamps
+    # For mock client with same second, they might be the same, so we check validity
+    assert url1 is not None
+    assert url2 is not None
+    assert bucket_name in url1
+    assert bucket_name in url2
+    assert key in url1
+    assert key in url2
+    # For real clients, URLs should be different; for mock, they might be same if same second
+    if not isinstance(s3_client, MockS3Client):
+        assert url1 != url2

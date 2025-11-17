@@ -1,5 +1,6 @@
 """Conftest for S3 tests."""
 
+import urllib.parse
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
 from types import TracebackType
@@ -79,8 +80,13 @@ from tests.integration.conftest import MockAppConfig
 class MockS3Client(AbstractS3Client):
     """Mock S3 client for testing."""
 
-    def __init__(self) -> None:
-        """Initialize the mock client."""
+    def __init__(self, endpoint_url: str | None = None) -> None:
+        """Initialize the mock client.
+
+        Args:
+            endpoint_url: Custom S3 endpoint URL (e.g., for MinIO or LocalStack).
+
+        """
         self._buckets: dict[str, dict[str, Any]] = {}
         self._objects: dict[tuple[str, str], dict[str, Any]] = {}
         self._bucket_acls: dict[str, S3GetBucketAclResponse] = {}
@@ -89,6 +95,7 @@ class MockS3Client(AbstractS3Client):
         self._bucket_lifecycle: dict[str, S3GetBucketLifecycleConfigurationResponse] = {}
         self._bucket_policies: dict[str, S3GetBucketPolicyResponse] = {}
         self._object_lock_configs: dict[str, S3ObjectLockConfiguration] = {}
+        self._endpoint_url = endpoint_url
 
     async def __aenter__(self) -> Self:
         """Enter the context manager."""
@@ -869,6 +876,105 @@ class MockS3Client(AbstractS3Client):
 
         return S3PutObjectRetentionResponse()
 
+    def generate_presigned_url(
+        self,
+        bucket: str,
+        key: str,
+        client_method: Literal["get_object", "put_object"] = "get_object",
+        expires_in: int = 3600,
+        version_id: str | None = None,
+        response_content_type: str | None = None,
+        response_content_disposition: str | None = None,
+        response_content_encoding: str | None = None,
+        response_content_language: str | None = None,
+        response_cache_control: str | None = None,
+        response_expires: datetime | None = None,
+        content_type: str | None = None,
+        content_md5: str | None = None,
+        metadata: dict[str, str] | None = None,
+        server_side_encryption: Literal["AES256", "aws:fsx", "aws:kms", "aws:kms:dsse"] | None = None,
+        sse_customer_algorithm: str | None = None,
+        sse_customer_key: str | None = None,
+        sse_kms_key_id: str | None = None,
+        acl: Literal[
+            "private",
+            "public-read",
+            "public-read-write",
+            "authenticated-read",
+            "aws-exec-read",
+            "bucket-owner-read",
+            "bucket-owner-full-control",
+        ]
+        | None = None,
+    ) -> str:
+        """Generate a presigned URL for an S3 object (mock implementation)."""
+        if bucket not in self._buckets:
+            raise S3NoSuchBucketClientException(f"Bucket {bucket} does not exist")
+
+        if client_method == "get_object" and (bucket, key) not in self._objects:
+            raise S3NoSuchKeyClientException(f"Object {key} does not exist in bucket {bucket}")
+
+        # Generate a mock presigned URL
+        # In a real implementation, this would be a signed URL from AWS
+        # For testing purposes, we'll return a URL that includes the bucket and key
+        expires_timestamp = int(datetime.now(UTC).timestamp() + expires_in)
+        params: dict[str, str] = {
+            "AWSAccessKeyId": "MOCK_ACCESS_KEY",
+            "Expires": str(expires_timestamp),
+            "Signature": "MOCK_SIGNATURE",
+        }
+
+        # Add parameters based on client_method (similar to real implementation)
+        if client_method == "get_object":
+            if version_id:
+                params["VersionId"] = version_id
+            if response_content_type:
+                params["ResponseContentType"] = response_content_type
+            if response_content_disposition:
+                params["ResponseContentDisposition"] = response_content_disposition
+            if response_content_encoding:
+                params["ResponseContentEncoding"] = response_content_encoding
+            if response_content_language:
+                params["ResponseContentLanguage"] = response_content_language
+            if response_cache_control:
+                params["ResponseCacheControl"] = response_cache_control
+            if response_expires:
+                params["ResponseExpires"] = response_expires.isoformat()
+            if sse_customer_algorithm:
+                params["SSECustomerAlgorithm"] = sse_customer_algorithm
+            if sse_customer_key:
+                params["SSECustomerKey"] = sse_customer_key
+        elif client_method == "put_object":
+            if content_type:
+                params["ContentType"] = content_type
+            if content_md5:
+                params["ContentMD5"] = content_md5
+            if metadata:
+                # Metadata is passed as headers in presigned URLs
+                for meta_key, meta_value in metadata.items():
+                    params[f"x-amz-meta-{meta_key}"] = meta_value
+            if server_side_encryption:
+                params["ServerSideEncryption"] = server_side_encryption
+            if sse_customer_algorithm:
+                params["SSECustomerAlgorithm"] = sse_customer_algorithm
+            if sse_customer_key:
+                params["SSECustomerKey"] = sse_customer_key
+            if sse_kms_key_id:
+                params["SSEKMSKeyId"] = sse_kms_key_id
+            if acl:
+                params["ACL"] = acl
+
+        query_string = urllib.parse.urlencode(params)
+
+        # Use custom endpoint if provided, otherwise use default AWS S3 format
+        if self._endpoint_url:
+            # For custom endpoints (e.g., MinIO, LocalStack), use the endpoint directly
+            # Format: http://localhost:9000/bucket/key?params
+            base_url = self._endpoint_url.rstrip("/")
+            return f"{base_url}/{bucket}/{urllib.parse.quote(key, safe='/')}?{query_string}"
+        # Default AWS S3 format
+        return f"https://{bucket}.s3.amazonaws.com/{urllib.parse.quote(key, safe='/')}?{query_string}"
+
 
 @pytest_asyncio.fixture(params=["mock", "aioboto3"])
 async def s3_client(request: pytest.FixtureRequest, container: AsyncContainer) -> AsyncGenerator[AbstractS3Client]:
@@ -883,7 +989,9 @@ async def s3_client(request: pytest.FixtureRequest, container: AsyncContainer) -
 
     """
     if request.param == "mock":
-        async with MockS3Client() as client:
+        config = await container.get(MockAppConfig)
+        endpoint_url = str(config.s3.endpoint_url) if config.s3.endpoint_url else None
+        async with MockS3Client(endpoint_url=endpoint_url) as client:
             yield client
 
     if request.param == "aioboto3":

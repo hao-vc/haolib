@@ -1100,3 +1100,99 @@ class AbstractS3Client(Protocol):
 
         """
         ...
+
+    def generate_presigned_url(
+        self,
+        bucket: str,
+        key: str,
+        client_method: Literal["get_object", "put_object"] = "get_object",
+        expires_in: int = 3600,
+        version_id: str | None = None,
+        response_content_type: str | None = None,
+        response_content_disposition: str | None = None,
+        response_content_encoding: str | None = None,
+        response_content_language: str | None = None,
+        response_cache_control: str | None = None,
+        response_expires: datetime | None = None,
+        content_type: str | None = None,
+        content_md5: str | None = None,
+        metadata: dict[str, str] | None = None,
+        server_side_encryption: Literal["AES256", "aws:fsx", "aws:kms", "aws:kms:dsse"] | None = None,
+        sse_customer_algorithm: str | None = None,
+        sse_customer_key: str | None = None,
+        sse_kms_key_id: str | None = None,
+        acl: Literal[
+            "private",
+            "public-read",
+            "public-read-write",
+            "authenticated-read",
+            "aws-exec-read",
+            "bucket-owner-read",
+            "bucket-owner-full-control",
+        ]
+        | None = None,
+    ) -> str:
+        """Generate a presigned URL for an S3 object.
+
+        A presigned URL gives time-limited permission to download or upload objects.
+        The URL can be entered in a browser or used by a program to access the object.
+        The credentials used by the presigned URL are those of the AWS user who generated the URL.
+
+        Args:
+            bucket: The name of the bucket containing the object.
+            key: The key (path and filename) of the object in the S3 bucket.
+            client_method: The S3 client method that the URL performs.
+                - "get_object": Generate a URL for downloading an object (default).
+                - "put_object": Generate a URL for uploading an object.
+            expires_in: The number of seconds the presigned URL is valid for. Default: 3600 (1 hour).
+                Maximum: 604800 (7 days) when using AWS CLI, 43200 (12 hours) when using console.
+            version_id: Version ID used to reference a specific version of the object.
+            response_content_type: Sets the Content-Type header of the response (for get_object).
+            response_content_disposition: Sets the Content-Disposition header of the response (for get_object).
+            response_content_encoding: Sets the Content-Encoding header of the response (for get_object).
+            response_content_language: Sets the Content-Language header of the response (for get_object).
+            response_cache_control: Sets the Cache-Control header of the response (for get_object).
+            response_expires: Sets the Expires header of the response (for get_object).
+            content_type: A standard MIME type describing the format of the object data (for put_object).
+            content_md5: The base64-encoded 128-bit MD5 digest of the data (for put_object).
+            metadata: A map of metadata to store with the object in S3 (for put_object).
+            server_side_encryption: The server-side encryption algorithm used when storing this object (for put_object).
+            sse_customer_algorithm: Specifies the algorithm to use when encrypting/decrypting the object.
+            sse_customer_key: Specifies the customer-provided encryption key.
+            sse_kms_key_id: Specifies the ID of the customer managed KMS key (for put_object).
+            acl: The canned ACL to apply to the object (for put_object).
+
+        Returns:
+            A presigned URL string that can be used to access the object.
+
+        Raises:
+            S3NoSuchBucketClientException: If the bucket does not exist.
+            S3NoSuchKeyClientException: If the object key does not exist (for get_object).
+            S3AccessDeniedClientException: If access is denied.
+            S3InvalidRequestClientException: If the request is invalid.
+            S3ServiceClientException: For other S3 service errors.
+
+        Example:
+            ```python
+            # Generate a presigned URL for downloading an object
+            url = await s3_client.generate_presigned_url(
+                bucket="my-bucket",
+                key="path/to/file.txt",
+                client_method="get_object",
+                expires_in=3600
+            )
+            print(f"Download URL: {url}")
+
+            # Generate a presigned URL for uploading an object
+            url = await s3_client.generate_presigned_url(
+                bucket="my-bucket",
+                key="path/to/upload.txt",
+                client_method="put_object",
+                expires_in=1800,
+                content_type="text/plain"
+            )
+            print(f"Upload URL: {url}")
+            ```
+
+        """
+        ...

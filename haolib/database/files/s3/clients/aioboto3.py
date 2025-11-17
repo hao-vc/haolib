@@ -5,6 +5,7 @@ from types import TracebackType
 from typing import Any, Self
 
 import aioboto3  # type: ignore[import-untyped]
+import boto3  # type: ignore[import-untyped]
 from botocore.exceptions import ClientError  # type: ignore[import-untyped]
 
 from haolib.database.files.s3.clients.abstract import (
@@ -126,6 +127,12 @@ class Aioboto3S3Client:
         self._verify = verify
         self._endpoint_url = endpoint_url
         self._client: Any = None
+        # Store credentials for sync client creation
+        self._aws_access_key_id = aws_access_key_id
+        self._aws_secret_access_key = aws_secret_access_key
+        self._aws_session_token = aws_session_token
+        self._region_name = region_name
+        self._profile_name = profile_name
 
     async def __aenter__(self) -> Self:
         """Enter the context manager."""
@@ -323,7 +330,7 @@ class Aioboto3S3Client:
             self._handle_client_error(e)
             raise  # This should never be reached, but for type checking
 
-    async def create_bucket(  # noqa: C901, PLR0912
+    async def create_bucket(
         self,
         bucket: str,
         acl: str | None = None,
@@ -1002,7 +1009,7 @@ class Aioboto3S3Client:
             self._handle_client_error(e)
             raise  # This should never be reached, but for type checking
 
-    async def put_bucket_acl(  # noqa: C901, PLR0912
+    async def put_bucket_acl(
         self,
         bucket: str,
         acl: str | None = None,
@@ -1093,7 +1100,7 @@ class Aioboto3S3Client:
             self._handle_client_error(e)
             raise  # This should never be reached, but for type checking
 
-    async def put_bucket_lifecycle_configuration(  # noqa: C901, PLR0912, PLR0915
+    async def put_bucket_lifecycle_configuration(  # noqa: PLR0915
         self,
         bucket: str,
         lifecycle_configuration: S3LifecycleConfiguration | None = None,
@@ -1218,7 +1225,7 @@ class Aioboto3S3Client:
             self._handle_client_error(e)
             raise  # This should never be reached, but for type checking
 
-    async def put_object(  # noqa: C901, PLR0912, PLR0915
+    async def put_object(  # noqa: PLR0915
         self,
         bucket: str,
         key: str,
@@ -1356,7 +1363,7 @@ class Aioboto3S3Client:
             self._handle_client_error(e)
             raise  # This should never be reached, but for type checking
 
-    async def put_object_acl(  # noqa: C901, PLR0912
+    async def put_object_acl(
         self,
         bucket: str,
         key: str,
@@ -1454,7 +1461,7 @@ class Aioboto3S3Client:
             self._handle_client_error(e)
             raise  # This should never be reached, but for type checking
 
-    async def put_object_lock_configuration(  # noqa: C901, PLR0912
+    async def put_object_lock_configuration(
         self,
         bucket: str,
         object_lock_configuration: S3ObjectLockConfiguration | None = None,
@@ -1521,7 +1528,7 @@ class Aioboto3S3Client:
             self._handle_client_error(e)
             raise  # This should never be reached, but for type checking
 
-    async def put_object_retention(  # noqa: C901
+    async def put_object_retention(
         self,
         bucket: str,
         key: str,
@@ -1564,3 +1571,114 @@ class Aioboto3S3Client:
         except ClientError as e:
             self._handle_client_error(e)
             raise  # This should never be reached, but for type checking
+
+    def generate_presigned_url(  # noqa: PLR0915
+        self,
+        bucket: str,
+        key: str,
+        client_method: str = "get_object",
+        expires_in: int = 3600,
+        version_id: str | None = None,
+        response_content_type: str | None = None,
+        response_content_disposition: str | None = None,
+        response_content_encoding: str | None = None,
+        response_content_language: str | None = None,
+        response_cache_control: str | None = None,
+        response_expires: datetime | None = None,
+        content_type: str | None = None,
+        content_md5: str | None = None,
+        metadata: dict[str, str] | None = None,
+        server_side_encryption: str | None = None,
+        sse_customer_algorithm: str | None = None,
+        sse_customer_key: str | None = None,
+        sse_kms_key_id: str | None = None,
+        acl: str | None = None,
+    ) -> str:
+        """Generate a presigned URL for an S3 object."""
+        if not self._client:
+            raise S3ServiceClientException("Client not initialized. Use async context manager.")
+
+        # Note: generate_presigned_url doesn't make network calls, so it won't validate
+        # bucket existence. However, for consistency with MockS3Client behavior in tests,
+        # we could add a check here. But in real AWS S3, presigned URLs can be generated
+        # for non-existent buckets - the error occurs when trying to use the URL.
+        # We'll let boto3 handle this naturally.
+
+        params: dict[str, Any] = {"Bucket": bucket, "Key": key}
+
+        # Add parameters based on client_method
+        if client_method == "get_object":
+            if version_id:
+                params["VersionId"] = version_id
+            if response_content_type:
+                params["ResponseContentType"] = response_content_type
+            if response_content_disposition:
+                params["ResponseContentDisposition"] = response_content_disposition
+            if response_content_encoding:
+                params["ResponseContentEncoding"] = response_content_encoding
+            if response_content_language:
+                params["ResponseContentLanguage"] = response_content_language
+            if response_cache_control:
+                params["ResponseCacheControl"] = response_cache_control
+            if response_expires:
+                params["ResponseExpires"] = response_expires
+            if sse_customer_algorithm:
+                params["SSECustomerAlgorithm"] = sse_customer_algorithm
+            if sse_customer_key:
+                params["SSECustomerKey"] = sse_customer_key
+        elif client_method == "put_object":
+            if content_type:
+                params["ContentType"] = content_type
+            if content_md5:
+                params["ContentMD5"] = content_md5
+            if metadata:
+                params["Metadata"] = metadata
+            if server_side_encryption:
+                params["ServerSideEncryption"] = server_side_encryption
+            if sse_customer_algorithm:
+                params["SSECustomerAlgorithm"] = sse_customer_algorithm
+            if sse_customer_key:
+                params["SSECustomerKey"] = sse_customer_key
+            if sse_kms_key_id:
+                params["SSEKMSKeyId"] = sse_kms_key_id
+            if acl:
+                params["ACL"] = acl
+        else:
+            error_msg = f"Unsupported client_method: {client_method}"
+            raise S3InvalidRequestClientException(error_msg)
+
+        try:
+            # boto3's generate_presigned_url is synchronous
+            # In aioboto3, we need to use a sync boto3 client for this operation
+            # since generate_presigned_url doesn't make network calls
+            # Create a sync boto3 session with stored credentials
+            sync_session = boto3.Session(
+                aws_access_key_id=self._aws_access_key_id,
+                aws_secret_access_key=self._aws_secret_access_key,
+                aws_session_token=self._aws_session_token,
+                region_name=self._region_name,
+                profile_name=self._profile_name,
+            )
+
+            # Create sync client with same config as async client
+            sync_client_kwargs: dict[str, Any] = {}
+            if self._endpoint_url:
+                sync_client_kwargs["endpoint_url"] = self._endpoint_url
+            if self._verify is not None:
+                sync_client_kwargs["verify"] = self._verify
+            if not self._use_ssl:
+                sync_client_kwargs["use_ssl"] = False
+
+            sync_client = sync_session.client("s3", **sync_client_kwargs)
+
+            url = sync_client.generate_presigned_url(
+                ClientMethod=client_method,
+                Params=params,
+                ExpiresIn=expires_in,
+            )
+
+        except ClientError as e:
+            self._handle_client_error(e)
+            raise  # This should never be reached, but for type checking
+
+        return url
