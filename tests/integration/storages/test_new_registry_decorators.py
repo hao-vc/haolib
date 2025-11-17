@@ -4,7 +4,6 @@ import pytest
 from sqlalchemy import select
 
 from haolib.storages.data_types.registry import DataTypeRegistry
-from haolib.storages.dsl import reado
 from haolib.storages.indexes.params import ParamIndex
 from haolib.storages.indexes.sql import SQLQueryIndex
 from tests.integration.storages.conftest import User, UserModel
@@ -154,4 +153,3 @@ async def test_decorator_order_independence() -> None:
     assert registration is not None
     assert registration.user_type == User
     assert registration.storage_type == UserModel
-

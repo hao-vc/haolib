@@ -6,7 +6,8 @@ This includes storages, ML models, APIs, and other data processing targets.
 
 from typing import Any, Protocol, TypeVar
 
-from haolib.storages.operations.base import Operation, Pipeline
+from haolib.pipelines.base import Operation, Pipeline
+from haolib.pipelines.context import PipelineContext
 
 T_Result = TypeVar("T_Result")
 
@@ -19,14 +20,16 @@ class AbstractDataTarget(Protocol):
 
     Example:
         ```python
-        # Storage target
-        result = await (reado(...) ^ sql_storage).execute()
+        from haolib.storages.indexes.params import ParamIndex
+
+        # Storage target (using fluent API)
+        result = await sql_storage.read(ParamIndex(User)).returning().execute()
 
         # ML Model target (future)
-        result = await (reado(...) ^ ml_model).execute()
+        # result = await ml_model.predict(...).execute()
 
         # API target (future)
-        result = await (reado(...) ^ api_client).execute()
+        # result = await api_client.get(...).execute()
         ```
 
     """
@@ -34,6 +37,8 @@ class AbstractDataTarget(Protocol):
     async def execute[T_Result](
         self,
         operation: Operation[Any, T_Result] | Pipeline[Any, Any, T_Result],
+        previous_result: Any = None,
+        pipeline_context: PipelineContext | None = None,
     ) -> T_Result:
         """Execute operation or pipeline.
 
@@ -45,6 +50,8 @@ class AbstractDataTarget(Protocol):
 
         Args:
             operation: Operation or pipeline to execute.
+            previous_result: Optional result from previous operation (for pipeline mode).
+            pipeline_context: Optional context about the entire pipeline for global optimization.
 
         Returns:
             Result of execution.

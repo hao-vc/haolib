@@ -4,7 +4,8 @@ from typing import Any, Protocol, TypeVar
 
 from haolib.components.abstract import AbstractComponent
 from haolib.storages.data_types.registry import DataTypeRegistry
-from haolib.storages.operations.base import Operation, Pipeline
+from haolib.pipelines.base import Operation, Pipeline
+from haolib.pipelines.context import PipelineContext
 from haolib.storages.plugins.abstract import AbstractStoragePlugin, AbstractStoragePluginPreset
 from haolib.storages.targets.abstract import AbstractDataTarget
 
@@ -35,6 +36,8 @@ class AbstractStorage(
     async def execute[T_Result](
         self,
         operation: Operation[Any, T_Result] | Pipeline[Any, Any, T_Result],
+        previous_result: Any = None,
+        pipeline_context: PipelineContext | None = None,
     ) -> T_Result:
         """Execute operation or pipeline atomically.
 
@@ -50,6 +53,8 @@ class AbstractStorage(
 
         Args:
             operation: Operation or pipeline to execute.
+            previous_result: Optional result from previous operation (for pipeline mode).
+            pipeline_context: Optional context about the entire pipeline for global optimization.
 
         Returns:
             Result of execution.
@@ -60,20 +65,20 @@ class AbstractStorage(
 
         Example:
             ```python
-            from haolib.storages.dsl import createo, reado, filtero
-            from haolib.storages.indexes import index
+            from haolib.pipelines import filtero
+            from haolib.storages.indexes.params import ParamIndex
 
             # Simple operation (executed atomically)
-            await storage.execute(createo([user1, user2]))
+            await storage.create([user1, user2]).returning().execute()
 
             # Pipeline (all operations in single transaction)
-            user_index = index(User, age=18)
+            user_index = ParamIndex(User, age=18)
             pipeline = (
-                createo([user1, user2])
-                | reado(search_index=user_index)
+                storage.create([user1, user2]).returning()
+                | storage.read(user_index).returning()
                 | filtero(lambda u: u.age >= 18)
             )
-            results = await storage.execute(pipeline)
+            results = await pipeline.execute()
             ```
 
         """

@@ -80,7 +80,6 @@ class TestVectorSearchIndex:
         """Test VectorSearchIndex initialization."""
         index = VectorSearchIndex(
             data_type=str,
-            
             query_text="search",
         )
         assert index.data_type == str
@@ -92,7 +91,6 @@ class TestVectorSearchIndex:
         """Test VectorSearchIndex initialization with custom defaults."""
         index = VectorSearchIndex(
             data_type=str,
-            
             query_text="search",
             limit=20,
             threshold=0.8,
@@ -104,7 +102,6 @@ class TestVectorSearchIndex:
         """Test VectorSearchIndex string representation."""
         index = VectorSearchIndex(
             data_type=str,
-            
             query_text="search",
         )
         repr_str = repr(index)
@@ -116,12 +113,10 @@ class TestVectorSearchIndex:
         """Test VectorSearchIndex equality."""
         index1 = VectorSearchIndex(
             data_type=str,
-            
             query_text="search",
         )
         index2 = VectorSearchIndex(
             data_type=str,
-            
             query_text="search",
         )
         assert index1 == index2
@@ -130,12 +125,10 @@ class TestVectorSearchIndex:
         """Test VectorSearchIndex equality with different values."""
         index1 = VectorSearchIndex(
             data_type=str,
-            
             query_text="search1",
         )
         index2 = VectorSearchIndex(
             data_type=str,
-            
             query_text="search2",
         )
         assert index1 != index2
@@ -144,7 +137,6 @@ class TestVectorSearchIndex:
         """Test VectorSearchIndex equality with different type."""
         index = VectorSearchIndex(
             data_type=str,
-            
             query_text="search",
         )
         assert index != "not an index"
@@ -153,7 +145,6 @@ class TestVectorSearchIndex:
         """Test VectorSearchIndex hash."""
         index = VectorSearchIndex(
             data_type=str,
-            
             query_text="search",
         )
         hash_val = hash(index)
@@ -167,7 +158,6 @@ class TestPathIndex:
         """Test PathIndex initialization."""
         index = PathIndex(
             data_type=bytes,
-            
             path="/test/path",
         )
         assert index.data_type == bytes
@@ -177,7 +167,6 @@ class TestPathIndex:
         """Test PathIndex string representation."""
         index = PathIndex(
             data_type=bytes,
-            
             path="/test/path",
         )
         repr_str = repr(index)
@@ -189,12 +178,10 @@ class TestPathIndex:
         """Test PathIndex equality."""
         index1 = PathIndex(
             data_type=bytes,
-            
             path="/test/path",
         )
         index2 = PathIndex(
             data_type=bytes,
-            
             path="/test/path",
         )
         assert index1 == index2
@@ -203,12 +190,10 @@ class TestPathIndex:
         """Test PathIndex equality with different values."""
         index1 = PathIndex(
             data_type=bytes,
-            
             path="/test/path1",
         )
         index2 = PathIndex(
             data_type=bytes,
-            
             path="/test/path2",
         )
         assert index1 != index2
@@ -217,7 +202,6 @@ class TestPathIndex:
         """Test PathIndex equality with different type."""
         index = PathIndex(
             data_type=bytes,
-            
             path="/test/path",
         )
         assert index != "not an index"
@@ -226,7 +210,6 @@ class TestPathIndex:
         """Test PathIndex hash."""
         index = PathIndex(
             data_type=bytes,
-            
             path="/test/path",
         )
         hash_val = hash(index)

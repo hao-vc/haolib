@@ -378,7 +378,7 @@ class DataTypeRegistry:
     def index[T_Data](
         self,
         data_type: type[T_Data],
-    ) -> Callable[[Callable[P, "SearchIndex[T_Data]"]], Callable[P, "SearchIndex[T_Data]"]]:
+    ) -> Callable[[Callable[P, SearchIndex[T_Data]]], Callable[P, SearchIndex[T_Data]]]:
         """Decorator to register index function.
 
         FastAPI-style decorator for registering search indexes.

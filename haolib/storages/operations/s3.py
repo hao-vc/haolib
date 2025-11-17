@@ -11,36 +11,46 @@ from typing import TYPE_CHECKING, Any
 
 from haolib.database.files.s3.clients.abstract import AbstractS3Client
 from haolib.storages.data_types.registry import DataTypeRegistry
-from haolib.storages.dsl.patch import normalize_patch
+
+# Import operations lazily to avoid circular import
+# Operations are imported in methods that use them
+if TYPE_CHECKING:
+    from haolib.pipelines.operations import (
+        CreateOperation,
+        DeleteOperation,
+        FilterOperation,
+        MapOperation,
+        PatchOperation,
+        ReadOperation,
+        ReduceOperation,
+        TransformOperation,
+        UpdateOperation,
+    )
+
+# Import events lazily to avoid circular import
+# Events are imported in methods that use them
 from haolib.storages.events.operations import (
-    AfterCreateEvent,
     AfterDeleteEvent,
     AfterFilterEvent,
     AfterMapEvent,
+    AfterPatchEvent,
     AfterReadEvent,
     AfterReduceEvent,
     AfterTransformEvent,
     AfterUpdateEvent,
-    BeforeCreateEvent,
     BeforeDeleteEvent,
     BeforeFilterEvent,
     BeforeMapEvent,
+    BeforePatchEvent,
     BeforeReadEvent,
     BeforeReduceEvent,
     BeforeTransformEvent,
     BeforeUpdateEvent,
 )
 from haolib.storages.indexes.path import PathIndex
-from haolib.storages.operations.concrete import (
-    CreateOperation,
-    DeleteOperation,
-    FilterOperation,
-    MapOperation,
-    ReadOperation,
-    ReduceOperation,
-    TransformOperation,
-    UpdateOperation,
-)
+
+# Import operations lazily to avoid circular import
+# Operations are imported in methods that use them
 
 if TYPE_CHECKING:
     from haolib.storages.s3 import S3Storage
@@ -245,7 +255,7 @@ class S3OperationsHandler:
 
         Example:
             ```python
-            result = await storage.execute(createo([user1, user2]))
+            result = await storage.create([user1, user2]).returning().execute()
             for data, path in result:
                 print(f"Saved {data} to {path}")
             # Output:
@@ -256,6 +266,8 @@ class S3OperationsHandler:
         """
         # Emit before event
         if self._storage is not None:
+            from haolib.storages.events.operations import BeforeCreateEvent  # noqa: PLC0415
+
             before_event = BeforeCreateEvent(
                 component=self._storage,
                 operation=operation,
@@ -288,10 +300,7 @@ class S3OperationsHandler:
             )
 
             # Convert back to user type
-            if registration:
-                user_item = registration.from_storage(storage_item)
-            else:
-                user_item = storage_item
+            user_item = registration.from_storage(storage_item) if registration else storage_item
 
             # Return tuple (data, path)
             result.append((user_item, path))
@@ -300,6 +309,8 @@ class S3OperationsHandler:
         # Extract just the data for the event (backward compatibility)
         data_result = [item for item, _ in result]
         if self._storage is not None:
+            from haolib.storages.events.operations import AfterCreateEvent  # noqa: PLC0415
+
             after_event = AfterCreateEvent(
                 component=self._storage,
                 operation=operation,
@@ -406,14 +417,20 @@ class S3OperationsHandler:
             )
             await self._storage.events.emit(after_event)
 
-    async def execute_update[T_Data](  # noqa: PLR0915
+    async def execute_patch[T_Data](  # noqa: PLR0915
         self,
-        operation: UpdateOperation[T_Data],
+        operation: PatchOperation[T_Data],
+        previous_result: Any | None = None,
     ) -> list[T_Data]:
-        """Execute update operation.
+        """Execute patch operation (partial update).
+
+        Can work in two modes:
+        1. Search mode: uses search_index to find data, patch to update
+        2. Pipeline mode: uses previous_result as data to update
 
         Args:
-            operation: Update operation to execute.
+            operation: Patch operation to execute.
+            previous_result: Previous operation result (if in pipeline mode).
 
         Returns:
             List of updated data.
@@ -421,12 +438,101 @@ class S3OperationsHandler:
         """
         # Emit before event
         if self._storage is not None:
-            before_event = BeforeUpdateEvent(
+            before_event = BeforePatchEvent(
                 component=self._storage,
                 operation=operation,
                 transaction=None,
             )
             await self._storage.events.emit(before_event)
+
+        # Determine mode: pipeline mode (previous_result) or search mode (search_index)
+        if previous_result is not None:
+            # Pipeline mode: use previous_result
+            from collections.abc import AsyncIterator  # noqa: PLC0415
+
+            # Collect items from previous_result
+            if isinstance(previous_result, AsyncIterator):
+                items = [item async for item in previous_result]
+            else:
+                items = list(previous_result) if isinstance(previous_result, (list, tuple)) else [previous_result]
+
+            if not items:
+                return []
+
+            # Get data type from first item
+            first_item = items[0]
+            data_type = type(first_item)
+
+            # Apply patch to each item
+            if operation.patch is None:
+                msg = "PatchOperation in pipeline mode requires patch parameter"
+                raise ValueError(msg)
+
+            updated_items = []
+            for item in items:
+                # Apply patch to item
+                if hasattr(item, "model_dump"):
+                    # Pydantic model
+                    item_dict = item.model_dump()
+                    item_dict.update(operation.patch)
+                    updated_item = type(item)(**item_dict)
+                elif hasattr(item, "__dict__"):
+                    # Dataclass or regular class
+                    item_dict = item.__dict__.copy()
+                    item_dict.update(operation.patch)
+                    updated_item = type(item)(**item_dict)
+                else:
+                    # Fallback: try to update directly
+                    updated_item = {**item, **operation.patch} if isinstance(item, dict) else item
+                updated_items.append(updated_item)
+
+            # Save updated items back to S3
+            # For S3, we need to determine paths from items
+            # This is a limitation - we need to know the path for each item
+            # For now, we'll require that items have a path attribute or use a default path
+            saved_items = []
+            for updated_item in updated_items:
+                # Try to get path from item
+                if hasattr(updated_item, "path"):
+                    path = updated_item.path
+                elif hasattr(updated_item, "id"):
+                    # Use ID as path
+                    path = f"{data_type.__name__}/{updated_item.id}"
+                else:
+                    msg = "Cannot determine S3 path for item in pipeline mode. Item must have 'path' or 'id' attribute."
+                    raise ValueError(msg)
+
+                # Save to S3
+                content_type = self._get_content_type(data_type, updated_item)
+                serialized = self._serialize(updated_item)
+                await self._s3_client.put_object(
+                    bucket=self._bucket,
+                    key=path,
+                    body=serialized,
+                    content_type=content_type,
+                )
+                saved_items.append(updated_item)
+
+            # Emit after event
+            if self._storage is not None:
+                after_event = AfterPatchEvent(
+                    component=self._storage,
+                    operation=operation,
+                    result=saved_items,
+                    transaction=None,
+                )
+                await self._storage.events.emit(after_event)
+
+            return saved_items
+
+        # Search mode: use search_index
+        if operation.search_index is None:
+            msg = "PatchOperation requires either search_index or previous_result"
+            raise ValueError(msg)
+
+        if operation.patch is None:
+            msg = "PatchOperation requires patch parameter"
+            raise ValueError(msg)
 
         # Validate index type
         if not isinstance(operation.search_index, PathIndex):
@@ -488,23 +594,252 @@ class S3OperationsHandler:
         else:
             item = deserialized
 
-        # Apply patch
-        patch = normalize_patch(operation.patch)
-        if isinstance(patch, dict):
-            # Dict patch - update fields
-            if isinstance(item, dict):
-                item.update(patch)
-            else:
-                # Try to update object attributes
-                for key, value in patch.items():
-                    if hasattr(item, key):
-                        setattr(item, key, value)
-        elif callable(patch):
-            # Callable patch - transform function
-            item = patch(item)
+        # Apply partial patch (only specified fields)
+        if isinstance(item, dict):
+            item.update(operation.patch)
+        else:
+            # Try to update object attributes
+            for key, value in operation.patch.items():
+                if hasattr(item, key):
+                    setattr(item, key, value)
 
         # Convert back to storage type
         updated_storage = registration.to_storage(item) if registration else item
+
+        # Get content type
+        content_type = self._get_content_type(data_type, updated_storage)
+
+        # Serialize and upload
+        serialized = self._serialize(updated_storage)
+        await self._s3_client.put_object(
+            bucket=self._bucket,
+            key=path,
+            body=serialized,
+            content_type=content_type,
+        )
+
+        # Convert back to user type
+        # Type is list[T_Data] after conversion, but mypy can't infer it
+        result: list[T_Data] = [registration.from_storage(updated_storage)] if registration else [updated_storage]  # type: ignore[assignment]
+
+        # Emit after event
+        if self._storage is not None:
+            after_event = AfterPatchEvent(
+                component=self._storage,
+                operation=operation,
+                result=result,
+                transaction=None,
+            )
+            await self._storage.events.emit(after_event)
+
+        return result
+
+    async def execute_update[T_Data](
+        self,
+        operation: UpdateOperation[T_Data],
+        previous_result: Any | None = None,
+        pipeline_context: Any | None = None,  # noqa: ARG002
+        previous_operation: Any | None = None,
+    ) -> list[T_Data]:
+        """Execute update operation (full update).
+
+        Can work in two modes:
+        1. Search mode: uses search_index to find data, data to update
+        2. Pipeline mode: uses previous_result as data to update
+
+        Args:
+            operation: Update operation to execute.
+            previous_result: Previous operation result (if in pipeline mode).
+            pipeline_context: Optional context about the entire pipeline for global optimization.
+            previous_operation: Previous operation (used to extract path for S3 in pipeline mode).
+
+        Returns:
+            List of updated data.
+
+        """
+        # Emit before event
+        if self._storage is not None:
+            before_event = BeforeUpdateEvent(
+                component=self._storage,
+                operation=operation,
+                transaction=None,
+            )
+            await self._storage.events.emit(before_event)
+
+        # Determine mode: pipeline mode (previous_result) or search mode (search_index)
+        if previous_result is not None:
+            # Pipeline mode: use previous_result
+            from collections.abc import AsyncIterator  # noqa: PLC0415
+
+            # Collect items from previous_result
+            if isinstance(previous_result, AsyncIterator):
+                items = [item async for item in previous_result]
+            else:
+                items = list(previous_result) if isinstance(previous_result, (list, tuple)) else [previous_result]
+
+            if not items:
+                return []
+
+            # Get data type from first item
+            first_item = items[0]
+            data_type = type(first_item)
+
+            # Apply update to each item
+            updated_items: list[T_Data] = []
+            for item in items:
+                # Apply data (object or function)
+                if operation.data:
+                    updated_item: T_Data = operation.data(item) if callable(operation.data) else operation.data  # type: ignore[assignment]
+                else:
+                    updated_item = item  # type: ignore[assignment]
+                updated_items.append(updated_item)
+
+            # Save updated items back to S3
+            # In pipeline mode, we need to preserve paths from original items
+            # Store original items with their paths before updating
+            saved_items: list[T_Data] = []
+
+            # Try to extract path from previous_operation if it was ReadOperation
+            read_path: str | None = None
+            if previous_operation is not None:
+                # Import operations lazily to avoid circular import
+                from haolib.pipelines.operations import ReadOperation  # noqa: PLC0415
+
+                if isinstance(previous_operation, ReadOperation) and isinstance(
+                    previous_operation.search_index, PathIndex
+                ):
+                    read_path = previous_operation.search_index.path
+
+            for i, updated_item in enumerate(updated_items):
+                original_item = items[i]
+                # Try to get path from original item (before update)
+                # Path might be stored in a tuple (data, path) from create operation
+                # or in the item itself
+                path: str | None = None
+
+                # First, try to use path from ReadOperation if available
+                if read_path is not None:
+                    path = read_path
+                # Check if original_item is a tuple (data, path) from create
+                elif isinstance(original_item, tuple) and len(original_item) == 2:
+                    _, path = original_item
+                elif not isinstance(original_item, tuple) and hasattr(original_item, "path"):
+                    path = original_item.path  # type: ignore[attr-defined]
+                elif not isinstance(original_item, tuple) and hasattr(original_item, "id"):
+                    # Use ID as path
+                    path = f"{data_type.__name__}/{original_item.id}"  # type: ignore[attr-defined]
+
+                # If still no path, try updated_item
+                if path is None:
+                    if not isinstance(updated_item, tuple) and hasattr(updated_item, "path"):
+                        path = updated_item.path  # type: ignore[attr-defined]
+                    elif not isinstance(updated_item, tuple) and hasattr(updated_item, "id"):
+                        path = f"{data_type.__name__}/{updated_item.id}"  # type: ignore[attr-defined]
+
+                if path is None:
+                    msg = (
+                        "Cannot determine S3 path for item in pipeline mode. "
+                        "Item must have 'path' or 'id' attribute, or come from a create operation."
+                    )
+                    raise ValueError(msg)
+
+                # Get content type and serialize
+                content_type = self._get_content_type(data_type, updated_item)
+                serialized = self._serialize(updated_item)
+                await self._s3_client.put_object(
+                    bucket=self._bucket,
+                    key=path,
+                    body=serialized,
+                    content_type=content_type,
+                )
+                saved_items.append(updated_item)
+
+            # Emit after event
+            if self._storage is not None:
+                after_event = AfterUpdateEvent(
+                    component=self._storage,
+                    operation=operation,
+                    result=saved_items,
+                    transaction=None,
+                )
+                await self._storage.events.emit(after_event)
+
+            return saved_items
+
+        # Search mode: use search_index
+        if operation.search_index is None:
+            msg = "UpdateOperation requires either search_index or previous_result"
+            raise ValueError(msg)
+
+        if operation.data is None:
+            msg = "UpdateOperation requires data parameter"
+            raise ValueError(msg)
+
+        # Validate index type
+        if not isinstance(operation.search_index, PathIndex):
+            msg = f"S3 storage only supports PathIndex, got {type(operation.search_index)}"
+            raise TypeError(msg)
+
+        path_index = operation.search_index
+        path = path_index.path
+        data_type = path_index.data_type
+
+        # Get object from S3
+        response = await self._s3_client.get_object(
+            bucket=self._bucket,
+            key=path,
+        )
+
+        # Extract body from response (S3GetObjectResponse has body field)
+        body = response.body
+
+        # Deserialize
+        deserialized = self._deserialize(body, data_type)
+
+        # Convert to user type if needed
+        # First check if deserialized is already the storage type
+        registration = self._registry.get_for_storage_type(type(deserialized))
+        if registration:
+            item = registration.from_storage(deserialized)
+        # Check if deserialized is a dict and we need to convert it to user type
+        elif isinstance(deserialized, dict):
+            # Try to construct user type from dict
+            if hasattr(data_type, "__init__"):
+                try:
+                    # Check for Pydantic v2 model_validate method
+                    if hasattr(data_type, "model_validate") and callable(getattr(data_type, "model_validate", None)):
+                        item = data_type.model_validate(deserialized)  # type: ignore[attr-defined]
+                    # Check for Pydantic v1 parse_obj method
+                    elif hasattr(data_type, "parse_obj") and callable(getattr(data_type, "parse_obj", None)):
+                        item = data_type.parse_obj(deserialized)  # type: ignore[attr-defined]
+                    else:
+                        # Try dict unpacking for dataclasses or __init__ with **kwargs
+                        item = data_type(**deserialized)
+                except Exception:
+                    # If construction fails, check if we have a registration that can help
+                    user_registration = self._registry.get_for_user_type(data_type)
+                    if user_registration:
+                        # We have a registration, but deserialized is a dict
+                        # This means we stored the user type directly (not storage type)
+                        # Try one more time with the user type
+                        try:
+                            item = data_type(**deserialized)
+                        except Exception:
+                            # Last resort: fallback to dict
+                            item = deserialized
+                    else:
+                        # No registration - fallback to dict
+                        item = deserialized
+            else:
+                item = deserialized
+        else:
+            item = deserialized
+
+        # Apply full update (replace entire object)
+        updated_data: T_Data = operation.data(item) if callable(operation.data) else operation.data  # type: ignore[assignment]
+
+        # Convert back to storage type
+        updated_storage = registration.to_storage(updated_data) if registration else updated_data
 
         # Get content type
         content_type = self._get_content_type(data_type, updated_storage)
@@ -537,14 +872,22 @@ class S3OperationsHandler:
     async def execute_delete[T_Data](
         self,
         operation: DeleteOperation[T_Data],
+        previous_result: Any | None = None,
+        previous_operation: Any | None = None,
     ) -> int:
         """Execute delete operation.
 
+        Can work in two modes:
+        1. Search mode: uses search_index to find data to delete
+        2. Pipeline mode: uses previous_result as data to delete
+
         Args:
             operation: Delete operation to execute.
+            previous_result: Previous operation result (if in pipeline mode).
+            previous_operation: Previous operation (used to extract path for S3 in pipeline mode).
 
         Returns:
-            Number of deleted items (0 or 1 for S3).
+            Number of deleted items.
 
         """
         # Emit before event
@@ -555,6 +898,72 @@ class S3OperationsHandler:
                 transaction=None,
             )
             await self._storage.events.emit(before_event)
+
+        # Determine mode: pipeline mode (previous_result) or search mode (search_index)
+        if previous_result is not None:
+            # Pipeline mode: use previous_result
+            from collections.abc import AsyncIterator  # noqa: PLC0415
+
+            # Collect items from previous_result
+            if isinstance(previous_result, AsyncIterator):
+                items = [item async for item in previous_result]
+            else:
+                items = list(previous_result) if isinstance(previous_result, (list, tuple)) else [previous_result]
+
+            if not items:
+                return 0
+
+            # Try to extract path from previous_operation if it was ReadOperation
+            read_path: str | None = None
+            if previous_operation is not None:
+                # Import operations lazily to avoid circular import
+                from haolib.pipelines.operations import ReadOperation  # noqa: PLC0415
+
+                if isinstance(previous_operation, ReadOperation) and isinstance(
+                    previous_operation.search_index, PathIndex
+                ):
+                    read_path = previous_operation.search_index.path
+
+            # Get paths from items and delete
+            deleted_count = 0
+            for item in items:
+                # First, try to use path from ReadOperation if available
+                if read_path is not None:
+                    path = read_path
+                # Try to get path from item
+                elif hasattr(item, "path"):
+                    path = item.path  # type: ignore[attr-defined]
+                elif hasattr(item, "id"):
+                    # Use ID as path
+                    data_type = type(item)
+                    path = f"{data_type.__name__}/{item.id}"  # type: ignore[attr-defined]
+                else:
+                    msg = "Cannot determine S3 path for item in pipeline mode. Item must have 'path' or 'id' attribute."
+                    raise ValueError(msg)
+
+                # Delete object from S3
+                await self._s3_client.delete_object(
+                    bucket=self._bucket,
+                    key=path,
+                )
+                deleted_count += 1
+
+            # Emit after event
+            if self._storage is not None:
+                after_event = AfterDeleteEvent(
+                    component=self._storage,
+                    operation=operation,
+                    result=deleted_count,
+                    transaction=None,
+                )
+                await self._storage.events.emit(after_event)
+
+            return deleted_count
+
+        # Search mode: use search_index
+        if operation.search_index is None:
+            msg = "DeleteOperation requires either search_index or previous_result"
+            raise ValueError(msg)
 
         # Validate index type
         if not isinstance(operation.search_index, PathIndex):

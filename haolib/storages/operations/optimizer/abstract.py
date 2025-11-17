@@ -4,7 +4,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any, Protocol
 
-from haolib.storages.operations.base import Operation, Pipeline
+from haolib.pipelines.base import Operation, Pipeline
 
 
 @dataclass

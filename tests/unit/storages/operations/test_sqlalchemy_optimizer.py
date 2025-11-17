@@ -6,19 +6,20 @@ import pytest
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from haolib.database.models.base.sqlalchemy import SQLAlchemyBaseModel
-from haolib.storages.data_types.registry import DataTypeRegistry
-from haolib.storages.indexes.params import ParamIndex
-from haolib.storages.operations.base import Pipeline
-from haolib.storages.operations.concrete import (
+from haolib.pipelines.base import Pipeline
+from haolib.pipelines.operations import (
     CreateOperation,
     DeleteOperation,
     FilterOperation,
     MapOperation,
+    PatchOperation,
     ReadOperation,
     ReduceOperation,
     TransformOperation,
     UpdateOperation,
 )
+from haolib.storages.data_types.registry import DataTypeRegistry
+from haolib.storages.indexes.params import ParamIndex
 from haolib.storages.operations.optimizer.sqlalchemy import SQLAlchemyPipelineOptimizer
 
 
@@ -125,12 +126,12 @@ class TestSQLAlchemyPipelineOptimizer:
         assert analysis.execution_plan == "storage"
         assert analysis.can_execute_on_storage is True
 
-    def test_analyze_update_operation(self, optimizer: SQLAlchemyPipelineOptimizer) -> None:
-        """Test analyze with UpdateOperation."""
+    def test_analyze_patch_operation(self, optimizer: SQLAlchemyPipelineOptimizer) -> None:
+        """Test analyze with PatchOperation."""
         index = ParamIndex(data_type=User, id=1)
-        update_op = UpdateOperation(search_index=index, patch={"name": "Bob"})
+        patch_op = PatchOperation(search_index=index, patch={"name": "Bob"})
 
-        analysis = optimizer.analyze(update_op)
+        analysis = optimizer.analyze(patch_op)
 
         assert analysis.execution_plan == "storage"
         assert analysis.can_execute_on_storage is True
@@ -380,3 +381,143 @@ class TestSQLAlchemyPipelineOptimizer:
 
             assert result == mock_result
             mock_build.assert_called_once_with(operations, mock_session)
+
+    def test_analyze_read_with_update_pipeline_mode(self, optimizer: SQLAlchemyPipelineOptimizer) -> None:
+        """Test analyze with ReadOperation | UpdateOperation in pipeline mode (no search_index)."""
+        index = ParamIndex(data_type=User, age=25)
+        read_op = ReadOperation(search_index=index)
+
+        # UpdateOperation without search_index - uses previous_result (pipeline mode)
+        update_op = UpdateOperation(search_index=None, data=None)
+        pipeline = read_op | update_op
+
+        analysis = optimizer.analyze(pipeline)
+
+        # Should be python execution plan (cannot optimize pipeline mode)
+        # When operation uses previous_result, entire pipeline executes in Python
+        assert analysis.execution_plan == "python"
+        assert analysis.can_execute_on_storage is False
+        assert len(analysis.sql_operations) == 0  # No SQL operations (entire pipeline in Python)
+        assert len(analysis.remaining_operations) == 2  # Both read_op and update_op
+
+    def test_analyze_read_with_patch_pipeline_mode(self, optimizer: SQLAlchemyPipelineOptimizer) -> None:
+        """Test analyze with ReadOperation | PatchOperation in pipeline mode (no search_index)."""
+        index = ParamIndex(data_type=User, age=25)
+        read_op = ReadOperation(search_index=index)
+
+        # PatchOperation without search_index - uses previous_result (pipeline mode)
+        patch_op = PatchOperation(search_index=None, patch=None)
+        pipeline = read_op | patch_op
+
+        analysis = optimizer.analyze(pipeline)
+
+        # Should be python execution plan (cannot optimize pipeline mode)
+        # When operation uses previous_result, entire pipeline executes in Python
+        assert analysis.execution_plan == "python"
+        assert analysis.can_execute_on_storage is False
+        assert len(analysis.sql_operations) == 0  # No SQL operations (entire pipeline in Python)
+        assert len(analysis.remaining_operations) == 2  # Both read_op and patch_op
+
+    def test_analyze_read_with_delete_pipeline_mode(self, optimizer: SQLAlchemyPipelineOptimizer) -> None:
+        """Test analyze with ReadOperation | DeleteOperation in pipeline mode (no search_index)."""
+        index = ParamIndex(data_type=User, age=25)
+        read_op = ReadOperation(search_index=index)
+
+        # DeleteOperation without search_index - uses previous_result (pipeline mode)
+        # This pattern can now be optimized into a single DELETE query
+        delete_op: DeleteOperation[User] = DeleteOperation(search_index=None)
+        pipeline = read_op | delete_op
+
+        analysis = optimizer.analyze(pipeline)
+
+        # Should be storage execution plan (can optimize reado | deleteo pattern)
+        # The optimizer recognizes this pattern and marks it for optimization
+        assert analysis.execution_plan == "storage"
+        assert analysis.can_execute_on_storage is True
+        assert len(analysis.sql_operations) == 2  # Both read_op and delete_op for optimization
+
+    def test_analyze_update_search_mode(self, optimizer: SQLAlchemyPipelineOptimizer) -> None:
+        """Test analyze with UpdateOperation in search mode (has search_index and data)."""
+        index = ParamIndex(data_type=User, id=1)
+        update_op = UpdateOperation(
+            search_index=index,
+            data=User(id=1, name="John", age=30),
+        )
+
+        analysis = optimizer.analyze(update_op)
+
+        # Should be storage execution plan (can optimize search mode)
+        assert analysis.execution_plan == "storage"
+        assert analysis.can_execute_on_storage is True
+        assert len(analysis.sql_operations) == 1
+
+    def test_analyze_patch_search_mode(self, optimizer: SQLAlchemyPipelineOptimizer) -> None:
+        """Test analyze with PatchOperation in search mode (has search_index and patch)."""
+        index = ParamIndex(data_type=User, id=1)
+        patch_op = PatchOperation(
+            search_index=index,
+            patch={"age": 30},
+        )
+
+        analysis = optimizer.analyze(patch_op)
+
+        # Should be storage execution plan (can optimize search mode)
+        assert analysis.execution_plan == "storage"
+        assert analysis.can_execute_on_storage is True
+        assert len(analysis.sql_operations) == 1
+
+    def test_analyze_delete_search_mode(self, optimizer: SQLAlchemyPipelineOptimizer) -> None:
+        """Test analyze with DeleteOperation in search mode (has search_index)."""
+        index = ParamIndex(data_type=User, id=1)
+        delete_op = DeleteOperation(search_index=index)
+
+        analysis = optimizer.analyze(delete_op)
+
+        # Should be storage execution plan (can optimize search mode)
+        assert analysis.execution_plan == "storage"
+        assert analysis.can_execute_on_storage is True
+        assert len(analysis.sql_operations) == 1
+
+    def test_can_execute_in_sql_update_with_previous(self, optimizer: SQLAlchemyPipelineOptimizer) -> None:
+        """Test _can_execute_in_sql with UpdateOperation that receives previous_result."""
+        index = ParamIndex(data_type=User, id=1)
+        # UpdateOperation without search_index - uses previous_result
+        update_op = UpdateOperation(search_index=None, data=None)
+
+        result = optimizer._can_execute_in_sql(update_op, has_previous=True)
+
+        assert result is False
+
+    def test_can_execute_in_sql_update_with_previous_but_has_index(
+        self, optimizer: SQLAlchemyPipelineOptimizer
+    ) -> None:
+        """Test _can_execute_in_sql with UpdateOperation that has search_index even with previous_result."""
+        index = ParamIndex(data_type=User, id=1)
+        # UpdateOperation with search_index - can still be optimized
+        update_op = UpdateOperation(
+            search_index=index,
+            data=User(id=1, name="John", age=30),
+        )
+
+        result = optimizer._can_execute_in_sql(update_op, has_previous=True)
+
+        assert result is True
+
+    def test_can_execute_in_sql_patch_with_previous(self, optimizer: SQLAlchemyPipelineOptimizer) -> None:
+        """Test _can_execute_in_sql with PatchOperation that receives previous_result."""
+        # PatchOperation without search_index - uses previous_result
+        patch_op = PatchOperation(search_index=None, patch=None)
+
+        result = optimizer._can_execute_in_sql(patch_op, has_previous=True)
+
+        assert result is False
+
+    def test_can_execute_in_sql_delete_with_previous(self, optimizer: SQLAlchemyPipelineOptimizer) -> None:
+        """Test _can_execute_in_sql with DeleteOperation that receives previous_result."""
+        # DeleteOperation without search_index - uses previous_result
+        # Now DeleteOperation can be executed in SQL even in pipeline mode (can be optimized with reado)
+        delete_op = DeleteOperation(search_index=None)
+
+        result = optimizer._can_execute_in_sql(delete_op, has_previous=True)
+
+        assert result is True  # Can be optimized with reado pattern

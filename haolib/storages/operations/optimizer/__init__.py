@@ -1,6 +1,23 @@
-"""Pipeline optimizers for storage operations."""
+"""Pipeline optimizers for storage backends.
 
-from haolib.storages.operations.optimizer.abstract import PipelineAnalysis, PipelineOptimizer
-from haolib.storages.operations.optimizer.sqlalchemy import SQLAlchemyPipelineOptimizer
+This module re-exports optimizer types from haolib.pipelines
+for backward compatibility.
+New code should import from haolib.pipelines directly.
+"""
 
-__all__ = ["PipelineAnalysis", "PipelineOptimizer", "SQLAlchemyPipelineOptimizer"]
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from haolib.pipelines import PipelineAnalysis, PipelineOptimizer
+
+# For runtime, import lazily to avoid circular import
+def __getattr__(name: str) -> Any:
+    """Lazy import for backward compatibility."""
+    import haolib.pipelines as pipelines  # noqa: PLC0415
+    
+    return getattr(pipelines, name)
+
+__all__ = [
+    "PipelineAnalysis",
+    "PipelineOptimizer",
+]

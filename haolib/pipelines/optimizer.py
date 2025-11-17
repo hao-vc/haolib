@@ -28,6 +28,9 @@ class PipelineAnalysis:
     execution_plan: str = "python"
     """Execution plan: 'storage', 'hybrid', or 'python'."""
 
+    sql_operations: Sequence[Operation] = ()
+    """Operations that can be executed in SQL (for building optimized query)."""
+
 
 class PipelineOptimizer(Protocol):
     """Pipeline optimizer for specific storage type.

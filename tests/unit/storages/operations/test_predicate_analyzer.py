@@ -2,12 +2,11 @@
 
 from typing import Any
 
-import pytest
 from sqlalchemy import String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from haolib.database.models.base.sqlalchemy import SQLAlchemyBaseModel
-from haolib.storages.operations.concrete import FilterOperation
+from haolib.pipelines.operations import FilterOperation
 from haolib.storages.operations.optimizer.predicate_analyzer import PredicateAnalyzer
 
 
@@ -65,7 +64,7 @@ def predicate_invalid_field(u: Any) -> bool:
 
 def predicate_non_attribute_left(u: Any) -> bool:
     """Predicate with non-attribute left side."""
-    return 25 == u.age  # Constant on left, attribute on right
+    return 25 == u.age  # Constant on left, attribute on right # noqa: SIM300
 
 
 def predicate_non_constant_right(u: Any) -> bool:

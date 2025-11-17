@@ -1,6 +1,6 @@
 """S3 storage implementation."""
 
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
 from types import TracebackType
 from typing import Any, Self
 
@@ -10,19 +10,28 @@ from haolib.components.plugins.registry import PluginRegistry
 from haolib.database.files.s3.clients.abstract import AbstractS3Client
 from haolib.storages.abstract import AbstractStorage
 from haolib.storages.data_types.registry import DataTypeRegistry
-from haolib.storages.operations.base import Operation, Pipeline, TargetBoundOperation, TargetSwitch
-from haolib.storages.operations.concrete import (
-    CreateOperation,
-    DeleteOperation,
-    FilterOperation,
-    MapOperation,
-    ReadOperation,
-    ReduceOperation,
-    TransformOperation,
-    UpdateOperation,
-)
+from haolib.pipelines.base import Operation, Pipeline, TargetBoundOperation, TargetSwitch
+# Import operations lazily to avoid circular import
+# Operations are imported in methods that use them
 from haolib.storages.operations.s3 import S3OperationsHandler
 from haolib.storages.plugins.abstract import AbstractStoragePlugin, AbstractStoragePluginPreset
+from haolib.storages.targets.abstract import AbstractDataTarget
+from haolib.storages.fluent.composites import (
+    CreateComposite,
+    DeleteComposite,
+    UpdateComposite,
+    ReadComposite,
+)
+from haolib.storages.fluent.protocols import (
+    CreateOperatable,
+    DeleteOperatable,
+    ReadOperatable,
+    UpdateOperatable,
+)
+from haolib.storages.indexes.path import PathIndex
+# Import operations lazily to avoid circular import
+# Operations are imported in methods that use them
+from haolib.pipelines.context import PipelineContext
 
 
 class S3OperationExecutor:
@@ -43,6 +52,8 @@ class S3OperationExecutor:
     async def execute[T_Result](
         self,
         operation: Operation[Any, T_Result] | Pipeline[Any, Any, T_Result],
+        previous_result: Any = None,
+        pipeline_context: PipelineContext | None = None,
     ) -> T_Result:
         """Execute operation or pipeline.
 
@@ -50,6 +61,8 @@ class S3OperationExecutor:
 
         Args:
             operation: Operation or pipeline to execute.
+            previous_result: Optional result from previous operation (for pipeline mode).
+            pipeline_context: Optional context about the entire pipeline for global optimization.
 
         Returns:
             Result of execution.
@@ -59,25 +72,41 @@ class S3OperationExecutor:
 
         """
         if isinstance(operation, Pipeline):
-            return await self._execute_pipeline(operation)
+            return await self._execute_pipeline(operation, previous_result=previous_result, pipeline_context=pipeline_context)
 
-        return await self._execute_operation(operation, previous_result=None)
+        return await self._execute_operation(operation, previous_result=previous_result, pipeline_context=pipeline_context)
 
     async def _execute_operation[T_Result](
         self,
         operation: Operation[Any, T_Result],
         previous_result: Any,
+        pipeline_context: PipelineContext | None = None,
+        previous_operation: Operation[Any, Any] | None = None,
     ) -> T_Result:
         """Execute single operation.
 
         Args:
             operation: Operation to execute.
             previous_result: Previous operation result (for pipeline).
+            pipeline_context: Optional context about the entire pipeline for global optimization.
 
         Returns:
             Operation result.
 
         """
+        # Import operations lazily to avoid circular import
+        from haolib.pipelines.operations import (
+            CreateOperation,
+            DeleteOperation,
+            FilterOperation,
+            MapOperation,
+            PatchOperation,
+            ReadOperation,
+            ReduceOperation,
+            TransformOperation,
+            UpdateOperation,
+        )
+
         if isinstance(operation, CreateOperation):
             return await self._handler.execute_create(operation)  # type: ignore[return-value]
 
@@ -85,11 +114,14 @@ class S3OperationExecutor:
             # ReadOperation returns AsyncIterator, not awaitable
             return self._handler.execute_read(operation)  # type: ignore[return-value]
 
+        if isinstance(operation, PatchOperation):
+            return await self._handler.execute_patch(operation, previous_result)  # type: ignore[return-value]
+
         if isinstance(operation, UpdateOperation):
-            return await self._handler.execute_update(operation)  # type: ignore[return-value]
+            return await self._handler.execute_update(operation, previous_result, pipeline_context, previous_operation)  # type: ignore[return-value]
 
         if isinstance(operation, DeleteOperation):
-            return await self._handler.execute_delete(operation)  # type: ignore[return-value]
+            return await self._handler.execute_delete(operation, previous_result, previous_operation)  # type: ignore[return-value]
 
         if isinstance(operation, FilterOperation):
             if previous_result is None:
@@ -121,11 +153,17 @@ class S3OperationExecutor:
     async def _execute_pipeline[T_Result](
         self,
         pipeline: Pipeline[Any, Any, T_Result],
+        previous_result: Any = None,
+        pipeline_context: PipelineContext | None = None,
+        previous_operation: Operation[Any, Any] | None = None,
     ) -> T_Result:
         """Execute pipeline of operations.
 
         Args:
             pipeline: Pipeline to execute.
+            previous_result: Optional result from previous operation (for pipeline mode).
+            pipeline_context: Optional context about the entire pipeline for global optimization.
+            previous_operation: Previous operation (for passing context to next operation).
 
         Returns:
             Final pipeline result.
@@ -143,9 +181,9 @@ class S3OperationExecutor:
 
         # Execute first operation
         if isinstance(first_op, Pipeline):
-            first_result = await self._execute_pipeline(first_op)
+            first_result = await self._execute_pipeline(first_op, previous_result=previous_result, pipeline_context=pipeline_context, previous_operation=previous_operation)
         else:
-            first_result = await self._execute_operation(first_op, previous_result=None)
+            first_result = await self._execute_operation(first_op, previous_result=previous_result, pipeline_context=pipeline_context, previous_operation=previous_operation)
 
         # Handle TargetBoundOperation and TargetSwitch in second operation
         second_op = pipeline.second
@@ -157,13 +195,19 @@ class S3OperationExecutor:
             msg = "TargetSwitch should not be passed to S3 executor directly"
             raise TypeError(msg)
 
-        # Execute second operation with first result
+        # Execute second operation with first result and first_op as previous_operation
         if isinstance(second_op, Pipeline):
-            return await self._execute_pipeline(second_op)
-        return await self._execute_operation(second_op, previous_result=first_result)
+            return await self._execute_pipeline(second_op, previous_result=first_result, pipeline_context=pipeline_context, previous_operation=first_op if isinstance(first_op, Operation) else None)
+        return await self._execute_operation(second_op, previous_result=first_result, pipeline_context=pipeline_context, previous_operation=first_op if isinstance(first_op, Operation) else None)
 
 
-class S3Storage(AbstractStorage):
+class S3Storage(
+    AbstractStorage,
+    ReadOperatable,
+    CreateOperatable,
+    UpdateOperatable,
+    DeleteOperatable,
+):
     """S3 storage implementation.
 
     Supports all CRUD operations and ETL pipelines.
@@ -176,8 +220,7 @@ class S3Storage(AbstractStorage):
         ```python
         from haolib.database.files.s3.clients import Aioboto3S3Client
         from haolib.storages.s3 import S3Storage
-        from haolib.storages.dsl import createo, reado
-        from haolib.storages.indexes import PathIndex
+        from haolib.storages.indexes.path import PathIndex
 
         async with Aioboto3S3Client(...) as s3_client:
             storage = S3Storage(
@@ -187,7 +230,7 @@ class S3Storage(AbstractStorage):
             )
 
             # Create - returns list of tuples (data, path)
-            result = await storage.execute(createo([user1, user2]))
+            result = await storage.create([user1, user2]).returning().execute()
             for data, path in result:
                 print(f"Saved {data} to {path}")
             # Output:
@@ -197,7 +240,8 @@ class S3Storage(AbstractStorage):
             # Read using path from create result
             _, path = result[0]
             index = PathIndex(data_type=User, path=path)
-            async for user in await storage.execute(reado(search_index=index)):
+            users = await storage.read(index).returning().execute()
+            for user in users:
                 print(user)
             ```
 
@@ -334,6 +378,8 @@ class S3Storage(AbstractStorage):
     async def execute[T_Result](
         self,
         operation: Operation[Any, T_Result] | Pipeline[Any, Any, T_Result],
+        previous_result: Any = None,
+        pipeline_context: PipelineContext | None = None,
     ) -> T_Result:
         """Execute operation or pipeline atomically.
 
@@ -342,6 +388,8 @@ class S3Storage(AbstractStorage):
 
         Args:
             operation: Operation or pipeline to execute.
+            previous_result: Optional result from previous operation (for pipeline mode).
+            pipeline_context: Optional context about the entire pipeline for global optimization.
 
         Returns:
             Result of execution.
@@ -352,21 +400,138 @@ class S3Storage(AbstractStorage):
 
         Example:
             ```python
-            from haolib.storages.dsl import createo, reado, filtero
-            from haolib.storages.indexes import PathIndex
+            from haolib.pipelines import filtero
+            from haolib.storages.indexes.path import PathIndex
 
             # Simple operation (executed atomically)
-            await storage.execute(createo([user1, user2]))
+            await storage.create([user1, user2]).returning().execute()
 
             # Pipeline (all operations executed sequentially)
-            index = PathIndex(data_type=User, index_name="user1", path="User/user1.json")
+            index = PathIndex(data_type=User, path="User/user1.json")
             pipeline = (
-                reado(search_index=index)
+                storage.read(index).returning()
                 | filtero(lambda u: u.age >= 18)
             )
-            results = await storage.execute(pipeline)
+            results = await pipeline.execute()
             ```
 
         """
         # Operations execute immediately (no transaction needed for S3)
-        return await self._executor.execute(operation)
+        return await self._executor.execute(operation, previous_result=previous_result, pipeline_context=pipeline_context)
+
+    def read[T_Data](
+        self,
+        index: PathIndex[T_Data],
+    ) -> ReadComposite[T_Data]:
+        """Create read composite.
+
+        Args:
+            index: Path index for S3.
+
+        Returns:
+            ReadComposite for chaining operations.
+
+        Example:
+            ```python
+            from haolib.storages.indexes.path import PathIndex
+
+            # Read with returning
+            users = await storage.read(PathIndex(User, path="users/user1.json")).returning().execute()
+
+            # Read + Update
+            await storage.read(PathIndex(User, path="users/user1.json")).update({"age": 26}).returning().execute()
+            ```
+
+        """
+        # Import lazily to avoid circular import
+        from haolib.pipelines.operations import ReadOperation  # noqa: PLC0415
+
+        op = ReadOperation(search_index=index)
+        return ReadComposite(storage=self, operation=op)
+
+    def create[T_Data](
+        self,
+        data: list[T_Data] | None = None,
+    ) -> CreateComposite[T_Data]:
+        """Create create composite.
+
+        Args:
+            data: Optional data to create. If None, data will come from previous_result.
+
+        Returns:
+            CreateComposite for chaining operations.
+
+        Example:
+            ```python
+            # Create with explicit data
+            await storage.create([user1, user2]).returning().execute()
+
+            # Create from previous_result
+            pipeline = (
+                storage.read(PathIndex(User, path="users/user1.json")).returning()
+                | storage.create()
+            )
+            await pipeline.execute()
+            ```
+
+        """
+        # Import lazily to avoid circular import
+        from haolib.pipelines.operations import CreateOperation  # noqa: PLC0415
+
+        op = CreateOperation(data=data or [])
+        return CreateComposite(storage=self, operation=op)
+
+    def update[T_Data](
+        self,
+        data: T_Data | Callable[[T_Data], T_Data] | None = None,
+    ) -> UpdateComposite[T_Data]:
+        """Create update composite.
+
+        Args:
+            data: Data to update with. Can be dict, object, or callable.
+
+        Returns:
+            UpdateComposite for chaining operations.
+
+        Example:
+            ```python
+            # Update with explicit data
+            await storage.update({"age": 26}).returning().execute()
+
+            # Update from previous_result
+            pipeline = (
+                storage.read(PathIndex(User, path="users/user1.json")).returning()
+                | storage.update({"age": 26})
+            )
+            await pipeline.execute()
+            ```
+
+        """
+        # Import lazily to avoid circular import
+        from haolib.pipelines.operations import UpdateOperation  # noqa: PLC0415
+
+        op = UpdateOperation(data=data)
+        return UpdateComposite(storage=self, operation=op)
+
+    def delete[T_Data](self) -> DeleteComposite[T_Data]:
+        """Create delete composite.
+
+        Returns:
+            DeleteComposite for chaining operations.
+
+        Example:
+            ```python
+            # Delete from previous_result
+            pipeline = (
+                storage.read(PathIndex(User, path="users/user1.json")).returning()
+                | storage.delete()
+            )
+            await pipeline.execute()
+            ```
+
+        """
+        # Import lazily to avoid circular import
+        from haolib.pipelines.operations import DeleteOperation  # noqa: PLC0415
+
+        op = DeleteOperation()
+        return DeleteComposite(storage=self, operation=op)

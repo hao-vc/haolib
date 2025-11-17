@@ -1,6 +1,6 @@
 """SQLAlchemy storage implementation."""
 
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncIterator, Callable, Sequence
 from types import TracebackType
 from typing import Any, Self
 
@@ -9,24 +9,36 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from haolib.components.events import EventEmitter
 from haolib.components.plugins.helpers import apply_preset
 from haolib.components.plugins.registry import PluginRegistry
-from haolib.storages.abstract import AbstractStorage
-from haolib.storages.data_types.registry import DataTypeRegistry
-from haolib.storages.operations.base import (
+from haolib.pipelines.base import (
     Operation,
     Pipeline,
     TargetBoundOperation,
     TargetSwitch,
 )
-from haolib.storages.operations.concrete import (
-    CreateOperation,
-    DeleteOperation,
-    FilterOperation,
-    MapOperation,
-    ReadOperation,
-    ReduceOperation,
-    TransformOperation,
-    UpdateOperation,
+from haolib.pipelines.context import PipelineContext
+
+# Import operations lazily to avoid circular import
+# Operations are imported in methods that use them
+from haolib.storages.abstract import AbstractStorage
+from haolib.storages.data_types.registry import DataTypeRegistry
+from haolib.storages.fluent.composites import (
+    CreateComposite,
+    DeleteComposite,
+    PatchComposite,
+    ReadComposite,
+    UpdateComposite,
 )
+from haolib.storages.fluent.protocols import (
+    CreateOperatable,
+    DeleteOperatable,
+    PatchOperatable,
+    ReadOperatable,
+    UpdateOperatable,
+)
+from haolib.storages.indexes.abstract import SearchIndex
+
+# Import operations lazily to avoid circular import
+# Operations are imported in methods that use them
 from haolib.storages.operations.optimizer.sqlalchemy import SQLAlchemyPipelineOptimizer
 from haolib.storages.operations.sqlalchemy import SQLAlchemyOperationsHandler
 from haolib.storages.plugins.abstract import AbstractStoragePlugin, AbstractStoragePluginPreset
@@ -63,6 +75,8 @@ class SQLAlchemyOperationExecutor:
         self,
         operation: Operation[Any, T_Result] | Pipeline[Any, Any, T_Result],
         transaction: SQLAlchemyStorageTransaction,
+        previous_result: Any = None,
+        pipeline_context: PipelineContext | None = None,
     ) -> T_Result:
         """Execute operation or pipeline.
 
@@ -71,6 +85,8 @@ class SQLAlchemyOperationExecutor:
         Args:
             operation: Operation or pipeline to execute.
             transaction: Transaction to use.
+            previous_result: Optional result from previous operation (for pipeline mode).
+            pipeline_context: Optional context about the entire pipeline for global optimization.
 
         Returns:
             Result of execution.
@@ -79,30 +95,40 @@ class SQLAlchemyOperationExecutor:
             TypeError: If operation type is not supported.
 
         """
-        # Analyze pipeline for optimization
-        analysis = self._optimizer.analyze(operation)
+        # Analyze pipeline for optimization (with global context)
+        analysis = self._optimizer.analyze(operation, pipeline_context=pipeline_context)
 
         # Execute based on analysis
-        if analysis.execution_plan == "storage" and analysis.optimized_operation:
+        if analysis.execution_plan == "storage":
             # Entire pipeline can be executed in SQL
             # Build optimized query if needed
             optimized_op = await self._build_optimized_operation_if_needed(analysis, transaction)
-            return await self._execute_operation(optimized_op, transaction, previous_result=None)
+            if optimized_op:
+                return await self._execute_operation(optimized_op, transaction, previous_result=previous_result)
+            # If optimization failed, fall back to normal execution
+            if isinstance(operation, Pipeline):
+                return await self._execute_pipeline(operation, transaction)
+            return await self._execute_operation(operation, transaction, previous_result=previous_result)
 
         if analysis.execution_plan == "hybrid" and analysis.optimized_operation:
             # Hybrid: part in SQL, part in Python
             # Build optimized query if needed
             optimized_op = await self._build_optimized_operation_if_needed(analysis, transaction)
-            # Execute optimized part in SQL
-            sql_result = await self._execute_operation(optimized_op, transaction, previous_result=None)
-            # Execute remaining operations in Python
-            return await self._execute_remaining_operations(analysis.remaining_operations, sql_result, transaction)
+            if optimized_op:
+                # Execute optimized part in SQL
+                sql_result = await self._execute_operation(optimized_op, transaction, previous_result=previous_result)
+                # Execute remaining operations in Python
+                return await self._execute_remaining_operations(analysis.remaining_operations, sql_result, transaction)
+            # If optimization failed, fall back to normal execution
+            if isinstance(operation, Pipeline):
+                return await self._execute_pipeline(operation, transaction)
+            return await self._execute_operation(operation, transaction, previous_result=previous_result)
 
         # All in Python - execute normally
         if isinstance(operation, Pipeline):
             return await self._execute_pipeline(operation, transaction)
 
-        return await self._execute_operation(operation, transaction, previous_result=None)
+        return await self._execute_operation(operation, transaction, previous_result=previous_result)
 
     async def _execute_pipeline(
         self,
@@ -131,6 +157,13 @@ class SQLAlchemyOperationExecutor:
 
         # Execute first operation
         first_result = await self._execute_operation(first_op, transaction, previous_result=None)
+
+        # Handle AsyncIterator from ReadOperation - collect it before passing to next operation
+        from collections.abc import AsyncIterator  # noqa: PLC0415
+
+        if isinstance(first_result, AsyncIterator):
+            # Collect AsyncIterator into list for next operation
+            first_result = [item async for item in first_result]
 
         # Handle TargetBoundOperation and TargetSwitch in second operation
         second_op = pipeline.second
@@ -169,6 +202,19 @@ class SQLAlchemyOperationExecutor:
         if isinstance(operation, Pipeline):
             return await self._execute_pipeline(operation, transaction)
 
+        # Import operations lazily to avoid circular import
+        from haolib.pipelines.operations import (  # noqa: PLC0415
+            CreateOperation,
+            DeleteOperation,
+            FilterOperation,
+            MapOperation,
+            PatchOperation,
+            ReadOperation,
+            ReduceOperation,
+            TransformOperation,
+            UpdateOperation,
+        )
+
         # Pattern matching by operation type
         match operation:
             case CreateOperation():
@@ -184,17 +230,23 @@ class SQLAlchemyOperationExecutor:
                 # ReadOperation returns AsyncIterator (not awaitable)
                 return self._operations_handler.execute_read(operation, transaction)
 
+            case PatchOperation():
+                # If previous_result is AsyncIterator - collect it first
+                if isinstance(previous_result, AsyncIterator):
+                    previous_result = await self._collect_async_iterator(previous_result)
+                return await self._operations_handler.execute_patch(operation, transaction, previous_result)
+
             case UpdateOperation():
-                if previous_result is not None:
-                    msg = "UpdateOperation cannot receive data from previous operation"
-                    raise ValueError(msg)
-                return await self._operations_handler.execute_update(operation, transaction)
+                # If previous_result is AsyncIterator - collect it first
+                if isinstance(previous_result, AsyncIterator):
+                    previous_result = await self._collect_async_iterator(previous_result)
+                return await self._operations_handler.execute_update(operation, transaction, previous_result)
 
             case DeleteOperation():
-                if previous_result is not None:
-                    msg = "DeleteOperation cannot receive data from previous operation"
-                    raise ValueError(msg)
-                return await self._operations_handler.execute_delete(operation, transaction)
+                # If previous_result is AsyncIterator - collect it first
+                if isinstance(previous_result, AsyncIterator):
+                    previous_result = await self._collect_async_iterator(previous_result)
+                return await self._operations_handler.execute_delete(operation, transaction, previous_result)
 
             case FilterOperation():
                 if previous_result is None:
@@ -281,10 +333,10 @@ class SQLAlchemyOperationExecutor:
         self,
         analysis: Any,
         transaction: SQLAlchemyStorageTransaction,
-    ) -> Operation[Any, Any]:
+    ) -> Operation[Any, Any] | None:
         """Build optimized operation if needed.
 
-        If the optimized operation needs query building (has filters),
+        If the optimized operation needs query building (has filters or update/patch/delete),
         build it using the optimizer's async method.
 
         Args:
@@ -292,18 +344,36 @@ class SQLAlchemyOperationExecutor:
             transaction: Transaction to use.
 
         Returns:
-            Optimized operation ready for execution.
+            Optimized operation ready for execution, or None if cannot optimize.
 
         """
-        if not analysis.optimized_operation:
-            msg = "No optimized operation in analysis"
-            raise ValueError(msg)
+        # If optimized_operation is None, we need to build it from sql_operations
+        if analysis.optimized_operation is None:
+            if analysis.sql_operations:
+                session = await transaction.get_session()
+                optimized = await self._optimizer.build_optimized_operation_async(
+                    list(analysis.sql_operations), session
+                )
+                if optimized:
+                    return optimized
+            return None
 
-        # If we have SQL operations with filters, build optimized query
+        # If we have SQL operations with filters or update/patch/delete, build optimized query
         if analysis.sql_operations and len(analysis.sql_operations) > 1:
-            # Check if we have filters
+            from haolib.pipelines.operations import (  # noqa: PLC0415
+                DeleteOperation,
+                FilterOperation,
+                PatchOperation,
+                UpdateOperation,
+            )
+
+            # Check if we have filters or update/patch/delete operations
             has_filters = any(isinstance(op, FilterOperation) for op in analysis.sql_operations)
-            if has_filters:
+            has_update = any(
+                isinstance(op, (UpdateOperation, PatchOperation, DeleteOperation)) for op in analysis.sql_operations
+            )
+
+            if has_filters or has_update:
                 session = await transaction.get_session()
                 optimized = await self._optimizer.build_optimized_operation_async(
                     list(analysis.sql_operations), session
@@ -314,7 +384,14 @@ class SQLAlchemyOperationExecutor:
         return analysis.optimized_operation
 
 
-class SQLAlchemyStorage(AbstractStorage):
+class SQLAlchemyStorage(
+    AbstractStorage,
+    ReadOperatable,
+    CreateOperatable,
+    UpdateOperatable,
+    PatchOperatable,
+    DeleteOperatable,
+):
     """SQLAlchemy storage implementation.
 
     Supports all CRUD operations and ETL pipelines.
@@ -334,7 +411,7 @@ class SQLAlchemyStorage(AbstractStorage):
             engine=engine,
             data_type_registry=registry
         ) as storage:
-            await storage.execute(createo([user1, user2]))
+            await storage.create([user1, user2]).returning().execute()
         # Engine automatically disposed on exit
 
         # Option 2: Provide custom session_maker
@@ -344,17 +421,17 @@ class SQLAlchemyStorage(AbstractStorage):
             session_maker=session_maker,
             data_type_registry=registry
         ) as storage:
-            await storage.execute(createo([user1, user2]))
+            await storage.create([user1, user2]).returning().execute()
         # Engine automatically disposed on exit
 
-        # Use with operations
-        from haolib.storages.dsl import createo, reado, filtero
-        from haolib.storages.indexes import index
+        # Use with fluent API
+        from haolib.storages.indexes.params import ParamIndex
 
-        await storage.execute(createo([user1, user2]))
+        await storage.create([user1, user2]).returning().execute()
 
-        user_index = index(User, age=25)
-        async for user in await storage.execute(reado(search_index=user_index)):
+        user_index = ParamIndex(User, age=25)
+        users = await storage.read(user_index).returning().execute()
+        for user in users:
             print(user)
         ```
 
@@ -484,7 +561,9 @@ class SQLAlchemyStorage(AbstractStorage):
 
     async def execute[T_Result](
         self,
-        operation: Operation[Any, T_Result] | Pipeline[Any, Any, T_Result],
+        operation: Operation[Any, T_Result] | Pipeline[Any, Any, T_Result] | Any,
+        previous_result: Any = None,
+        pipeline_context: PipelineContext | None = None,
     ) -> T_Result:
         """Execute operation or pipeline atomically.
 
@@ -497,6 +576,8 @@ class SQLAlchemyStorage(AbstractStorage):
 
         Args:
             operation: Operation or pipeline to execute.
+            previous_result: Optional result from previous operation (for pipeline mode).
+            pipeline_context: Optional context about the entire pipeline for global optimization.
 
         Returns:
             Result of execution.
@@ -507,27 +588,35 @@ class SQLAlchemyStorage(AbstractStorage):
 
         Example:
             ```python
-            from haolib.storages.dsl import createo, reado, filtero
-            from haolib.storages.indexes import index
+            from haolib.pipelines import filtero
+            from haolib.storages.indexes.params import ParamIndex
 
             # Simple operation (executed atomically in a transaction)
-            await storage.execute(createo([user1, user2]))
+            await storage.create([user1, user2]).returning().execute()
 
             # Pipeline (all operations in single transaction)
-            user_index = index(User, age=18)
+            user_index = ParamIndex(User, age=18)
             pipeline = (
-                createo([user1, user2])
-                | reado(search_index=user_index)
+                storage.create([user1, user2]).returning()
+                | storage.read(user_index).returning()
                 | filtero(lambda u: u.age >= 18)
             )
-            results = await storage.execute(pipeline)
+            results = await pipeline.execute()
             ```
 
         """
+        # Handle BaseComposite - call its execute method
+        from haolib.storages.fluent.composites import BaseComposite  # noqa: PLC0415
+
+        if isinstance(operation, BaseComposite):
+            return await operation.execute()
+
         # Automatically create transaction for each operation/pipeline
         txn = self._begin_transaction()
         async with txn:
-            result = await self._executor.execute(operation, txn)
+            result = await self._executor.execute(
+                operation, txn, previous_result=previous_result, pipeline_context=pipeline_context
+            )
             # If result is AsyncIterator and we're in a pipeline context,
             # we need to collect it inside the transaction
             # But for standalone ReadOperation, we return AsyncIterator as-is
@@ -543,6 +632,8 @@ class SQLAlchemyStorage(AbstractStorage):
         self,
         operation: Operation[Any, T_Result] | Pipeline[Any, Any, T_Result],
         transaction: SQLAlchemyStorageTransaction,
+        previous_result: Any = None,
+        pipeline_context: PipelineContext | None = None,
     ) -> T_Result:
         """Execute operation or pipeline with existing transaction.
 
@@ -553,6 +644,8 @@ class SQLAlchemyStorage(AbstractStorage):
         Args:
             operation: Operation or pipeline to execute.
             transaction: Existing transaction to use.
+            previous_result: Optional result from previous operation (for pipeline mode).
+            pipeline_context: Optional context about the entire pipeline for global optimization.
 
         Returns:
             Result of execution.
@@ -562,8 +655,159 @@ class SQLAlchemyStorage(AbstractStorage):
             TypeError: If operation type is not supported.
 
         """
-        result = await self._executor.execute(operation, transaction)
+        result = await self._executor.execute(
+            operation, transaction, previous_result=previous_result, pipeline_context=pipeline_context
+        )
         # Handle AsyncIterator same way as execute()
         if isinstance(result, AsyncIterator):
             return [item async for item in result]  # type: ignore[return-value]
         return result
+
+    def read[T_Data](
+        self,
+        index: SearchIndex[T_Data],
+    ) -> ReadComposite[T_Data]:
+        """Create read composite.
+
+        Args:
+            index: Search index (ParamIndex or SQLQueryIndex).
+
+        Returns:
+            ReadComposite for chaining operations.
+
+        Example:
+            ```python
+            from haolib.storages.indexes.params import ParamIndex
+
+            # Read with returning
+            users = await storage.read(ParamIndex(User, age=25)).returning().execute()
+
+            # Read + Update
+            await storage.read(ParamIndex(User, age=25)).update({"age": 26}).returning().execute()
+            ```
+
+        """
+        # Import lazily to avoid circular import
+        from haolib.pipelines.operations import ReadOperation  # noqa: PLC0415
+
+        op = ReadOperation(search_index=index)
+        return ReadComposite(storage=self, operation=op)
+
+    def create[T_Data](
+        self,
+        data: list[T_Data] | None = None,
+    ) -> CreateComposite[T_Data]:
+        """Create create composite.
+
+        Args:
+            data: Optional data to create. If None, data will come from previous_result.
+
+        Returns:
+            CreateComposite for chaining operations.
+
+        Example:
+            ```python
+            # Create with explicit data
+            await storage.create([user1, user2]).returning().execute()
+
+            # Create from previous_result
+            pipeline = (
+                storage.read(ParamIndex(User, age=25)).returning()
+                | storage.create()
+            )
+            await pipeline.execute()
+            ```
+
+        """
+        # Import lazily to avoid circular import
+        from haolib.pipelines.operations import CreateOperation  # noqa: PLC0415
+
+        op = CreateOperation(data=data or [])
+        return CreateComposite(storage=self, operation=op)
+
+    def update[T_Data](
+        self,
+        data: T_Data | Callable[[T_Data], T_Data] | None = None,
+    ) -> UpdateComposite[T_Data]:
+        """Create update composite.
+
+        Args:
+            data: Data to update with. Can be object or callable.
+
+        Returns:
+            UpdateComposite for chaining operations.
+
+        Example:
+            ```python
+            # Update with explicit data
+            await storage.update(User(age=26)).returning().execute()
+
+            # Update from previous_result
+            pipeline = (
+                storage.read(ParamIndex(User, age=25)).returning()
+                | storage.update(lambda u: User(age=u.age + 1))
+            )
+            await pipeline.execute()
+            ```
+
+        """
+        # Import lazily to avoid circular import
+        from haolib.pipelines.operations import UpdateOperation  # noqa: PLC0415
+
+        op: UpdateOperation[T_Data] = UpdateOperation(data=data)
+        return UpdateComposite(storage=self, operation=op)
+
+    def patch[T_Data](
+        self,
+        patch: dict[str, Any] | Any | None = None,
+    ) -> PatchComposite[T_Data]:
+        """Create patch composite.
+
+        Args:
+            patch: Patch to apply. Can be dict, Pydantic model, or dataclass.
+
+        Returns:
+            PatchComposite for chaining operations.
+
+        Example:
+            ```python
+            # Patch with explicit data
+            await storage.patch({"age": 26}).returning().execute()
+
+            # Patch from previous_result
+            pipeline = (
+                storage.read(ParamIndex(User, age=25)).returning()
+                | storage.patch({"age": 26})
+            )
+            await pipeline.execute()
+            ```
+
+        """
+        # Import lazily to avoid circular import
+        from haolib.pipelines.operations import PatchOperation  # noqa: PLC0415
+
+        op: PatchOperation[T_Data] = PatchOperation(patch=patch)
+        return PatchComposite(storage=self, operation=op)
+
+    def delete[T_Data](self) -> DeleteComposite[T_Data]:
+        """Create delete composite.
+
+        Returns:
+            DeleteComposite for chaining operations.
+
+        Example:
+            ```python
+            # Delete from previous_result
+            pipeline = (
+                storage.read(ParamIndex(User, age=25)).returning()
+                | storage.delete()
+            )
+            await pipeline.execute()
+            ```
+
+        """
+        # Import lazily to avoid circular import
+        from haolib.pipelines.operations import DeleteOperation  # noqa: PLC0415
+
+        op: DeleteOperation[T_Data] = DeleteOperation()
+        return DeleteComposite(storage=self, operation=op)

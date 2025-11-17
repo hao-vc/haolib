@@ -5,7 +5,7 @@ Converts various index types to SQLAlchemy queries.
 
 from typing import Any
 
-from sqlalchemy import Select, select
+from sqlalchemy import Delete, Select, Update, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import DeclarativeBase
 
@@ -27,53 +27,74 @@ class IndexHandler:
         """
         self._registry = registry
 
-    def _extract_model_from_query(self, query: Select[Any]) -> type[DeclarativeBase] | None:
-        """Extract storage model from SQLAlchemy Select query.
+    def _extract_model_from_query(self, query: Select[Any] | Update[Any] | Delete[Any]) -> type[DeclarativeBase] | None:
+        """Extract storage model from SQLAlchemy query (Select, Update, or Delete).
 
         Args:
-            query: SQLAlchemy Select query.
+            query: SQLAlchemy query (Select, Update, or Delete).
 
         Returns:
             Storage model type, or None if cannot be extracted.
 
         """
-        # Try to get model from query.get_final_froms() (tables/models in FROM clause)
-        froms = query.get_final_froms() if hasattr(query, "get_final_froms") else getattr(query, "froms", None)
-        if froms:
-            for from_item in froms:
-                # Check if it's a mapped class (DeclarativeBase)
-                if isinstance(from_item, type) and issubclass(from_item, DeclarativeBase):
-                    return from_item
+        # For Update and Delete statements, get table from statement
+        if isinstance(query, (Update, Delete)):
+            # Update and Delete have .table attribute
+            if hasattr(query, "table"):
+                table = query.table
+                # Check if it's a mapped class
+                if isinstance(table, type) and issubclass(table, DeclarativeBase):
+                    return table
                 # Check if it's a Table and get mapped class from it
-                if hasattr(from_item, "entity") and isinstance(from_item.entity, type):
-                    if issubclass(from_item.entity, DeclarativeBase):
+                if (
+                    hasattr(table, "entity")
+                    and isinstance(table.entity, type)
+                    and issubclass(table.entity, DeclarativeBase)
+                ):
+                    return table.entity
+
+        # For Select queries, use existing logic
+        if isinstance(query, Select):
+            # Try to get model from query.get_final_froms() (tables/models in FROM clause)
+            froms = query.get_final_froms() if hasattr(query, "get_final_froms") else getattr(query, "froms", None)
+            if froms:
+                for from_item in froms:
+                    # Check if it's a mapped class (DeclarativeBase)
+                    if isinstance(from_item, type) and issubclass(from_item, DeclarativeBase):
+                        return from_item
+                    # Check if it's a Table and get mapped class from it
+                    if (
+                        hasattr(from_item, "entity")
+                        and isinstance(from_item.entity, type)
+                        and issubclass(from_item.entity, DeclarativeBase)
+                    ):
                         return from_item.entity
 
-        # Try to get from column_descriptions (for Select queries)
-        if hasattr(query, "column_descriptions") and query.column_descriptions:
-            for desc in query.column_descriptions:
-                if "entity" in desc and desc["entity"] is not None:
-                    entity = desc["entity"]
-                    if isinstance(entity, type) and issubclass(entity, DeclarativeBase):
-                        return entity
+            # Try to get from column_descriptions (for Select queries)
+            if hasattr(query, "column_descriptions") and query.column_descriptions:
+                for desc in query.column_descriptions:
+                    if "entity" in desc and desc["entity"] is not None:
+                        entity = desc["entity"]
+                        if isinstance(entity, type) and issubclass(entity, DeclarativeBase):
+                            return entity
 
-        # Try to get from selected_columns
-        if hasattr(query, "selected_columns"):
-            for col in query.selected_columns:
-                if hasattr(col, "entity") and col.entity is not None:
-                    entity = col.entity
-                    if isinstance(entity, type) and issubclass(entity, DeclarativeBase):
-                        return entity
+            # Try to get from selected_columns
+            if hasattr(query, "selected_columns"):
+                for col in query.selected_columns:
+                    if hasattr(col, "entity") and col.entity is not None:
+                        entity = col.entity
+                        if isinstance(entity, type) and issubclass(entity, DeclarativeBase):
+                            return entity
 
         return None
 
-    def get_data_type_from_query(self, query: Select[Any]) -> type[Any]:
+    def get_data_type_from_query(self, query: Select[Any] | Update[Any] | Delete[Any]) -> type[Any]:
         """Get user data type from SQLAlchemy query.
 
         Extracts storage model from query and finds corresponding user type from registry.
 
         Args:
-            query: SQLAlchemy Select query.
+            query: SQLAlchemy query (Select, Update, or Delete).
 
         Returns:
             User data type.
@@ -100,7 +121,7 @@ class IndexHandler:
         self,
         index: SearchIndex[T_Data],
         session: AsyncSession,
-    ) -> Select[tuple[Any]]:
+    ) -> Select[tuple[Any]] | Update[Any] | Delete[Any]:
         """Convert index to SQLAlchemy query.
 
         Args:
@@ -108,7 +129,7 @@ class IndexHandler:
             session: SQLAlchemy session (for potential query execution).
 
         Returns:
-            SQLAlchemy Select query.
+            SQLAlchemy query (Select, Update, or Delete).
 
         Raises:
             TypeError: If index type is not supported.

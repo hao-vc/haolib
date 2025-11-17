@@ -1,48 +1,43 @@
 """DSL for storage operations.
 
-Provides convenient functions for creating storage operations with minimal code.
+This module is deprecated. Use fluent API instead:
+- storage.create() instead of createo()
+- storage.read() instead of reado()
+- storage.update() instead of updateo()
+- storage.patch() instead of patcho()
+- storage.delete() instead of deleteo()
+
+Python operations (filtero, mapo, reduceo, transformo) are still available
+from haolib.pipelines.
 
 Example:
     ```python
-    from haolib.storages.dsl import createo, reado, filtero
-    from haolib.storages.indexes import index
+    from haolib.pipelines import filtero, mapo
+    from haolib.storages.indexes.params import ParamIndex
 
-    # Simple operations
-    await storage.execute(createo([user1, user2]))
-
-    user_index = index(User, age=25)
-    async for user in await storage.execute(reado(search_index=user_index)):
-        print(user)
-
-    # Pipeline
-    pipeline = (
-        createo([user1, user2])
-        | reado(search_index=index(User))
+    # New fluent API
+    result = await (
+        storage.read(ParamIndex(User, age=25)).returning()
         | filtero(lambda u: u.age >= 18)
-    )
-    await storage.execute(pipeline)
+        | mapo(lambda u, _idx: u.name)
+    ).execute()
     ```
 
 """
 
-from haolib.storages.dsl.operations import (
-    createo,
-    deleteo,
+# Deprecated: CRUD operations removed from public API
+# Use fluent API: storage.create(), storage.read(), etc.
+# Only Python operations are exported for pipeline composition
+from haolib.pipelines import (
     filtero,
     mapo,
-    reado,
     reduceo,
     transformo,
-    updateo,
 )
 
 __all__ = [
-    "createo",
-    "deleteo",
     "filtero",
     "mapo",
-    "reado",
     "reduceo",
     "transformo",
-    "updateo",
 ]

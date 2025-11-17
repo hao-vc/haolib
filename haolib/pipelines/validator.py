@@ -2,13 +2,13 @@
 
 from typing import Any
 
-from haolib.storages.operations.base import (
+from haolib.pipelines.base import (
     Operation,
     Pipeline,
     TargetBoundOperation,
     TargetSwitch,
 )
-from haolib.storages.operations.concrete import (
+from haolib.pipelines.operations import (
     CreateOperation,
     DeleteOperation,
     FilterOperation,
@@ -204,9 +204,15 @@ class PipelineValidator:
 
         # Validate target requirement
         # Operations that require target (Read, Create, Update, Delete) must be bound to target
-        # Exception: CreateOperation can receive previous_result and use it as data
-        # But ReadOperation, UpdateOperation, DeleteOperation always need target
+        # Exception: CreateOperation, UpdateOperation, PatchOperation, DeleteOperation can receive previous_result
         if needs_target and not has_target:
+            from haolib.pipelines.operations import (  # noqa: PLC0415
+                CreateOperation,
+                DeleteOperation,
+                PatchOperation,
+                UpdateOperation,
+            )
+            
             # CreateOperation can work without target if it receives previous_result OR has data
             if isinstance(actual_op, CreateOperation):
                 if receives_previous:
@@ -220,12 +226,72 @@ class PipelineValidator:
                     op_name = type(actual_op).__name__ if isinstance(actual_op, Operation) else "Operation"
                     msg = (
                         f"Operation {op_name} at index {index} has no data and no previous_result. "
-                        f"Either provide data to createo() or ensure it receives previous_result from pipeline."
+                        f"Either provide data to storage.create() or ensure it receives previous_result from pipeline."
                     )
                     raise PipelineValidationError(
                         msg,
                         operation_index=index,
                     )
+            elif isinstance(actual_op, (UpdateOperation, PatchOperation, DeleteOperation)):
+                # These operations can work without search_index/data if they receive previous_result
+                if receives_previous:
+                    # Check if operation has required parameters for search mode
+                    if isinstance(actual_op, UpdateOperation):
+                        if actual_op.search_index is None and actual_op.data is None:
+                            # This is OK - UpdateOperation will use previous_result
+                            pass
+                        else:
+                            # Has search_index or data, but also receives previous_result - this is OK too
+                            pass
+                    elif isinstance(actual_op, PatchOperation):
+                        if actual_op.search_index is None and actual_op.patch is None:
+                            # This is OK - PatchOperation will use previous_result
+                            pass
+                        else:
+                            # Has search_index or patch, but also receives previous_result - this is OK too
+                            pass
+                    elif isinstance(actual_op, DeleteOperation):
+                        if actual_op.search_index is None:
+                            # This is OK - DeleteOperation will use previous_result
+                            pass
+                        else:
+                            # Has search_index, but also receives previous_result - this is OK too
+                            pass
+                else:
+                    # No previous_result - must have search_index (and data/patch for update/patch)
+                    if isinstance(actual_op, UpdateOperation):
+                        if actual_op.search_index is None or actual_op.data is None:
+                            op_name = type(actual_op).__name__ if isinstance(actual_op, Operation) else "Operation"
+                            msg = (
+                                f"Operation {op_name} at index {index} requires either search_index and data, "
+                                f"or previous_result from pipeline."
+                            )
+                            raise PipelineValidationError(
+                                msg,
+                                operation_index=index,
+                            )
+                    elif isinstance(actual_op, PatchOperation):
+                        if actual_op.search_index is None or actual_op.patch is None:
+                            op_name = type(actual_op).__name__ if isinstance(actual_op, Operation) else "Operation"
+                            msg = (
+                                f"Operation {op_name} at index {index} requires either search_index and patch, "
+                                f"or previous_result from pipeline."
+                            )
+                            raise PipelineValidationError(
+                                msg,
+                                operation_index=index,
+                            )
+                    elif isinstance(actual_op, DeleteOperation):
+                        if actual_op.search_index is None:
+                            op_name = type(actual_op).__name__ if isinstance(actual_op, Operation) else "Operation"
+                            msg = (
+                                f"Operation {op_name} at index {index} requires either search_index "
+                                f"or previous_result from pipeline."
+                            )
+                            raise PipelineValidationError(
+                                msg,
+                                operation_index=index,
+                            )
             else:
                 # All other target-requiring operations must have target
                 op_name = type(actual_op).__name__ if isinstance(actual_op, Operation) else "Operation"
@@ -264,3 +330,4 @@ class PipelineValidator:
             operation,
             (ReadOperation, CreateOperation, PatchOperation, UpdateOperation, DeleteOperation),
         )
+

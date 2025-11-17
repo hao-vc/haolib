@@ -4,14 +4,15 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from haolib.storages.dsl import createo, filtero, mapo, reado, reduceo, transformo
+from haolib.pipelines import filtero, mapo, reduceo, transformo
+from haolib.pipelines.operations import CreateOperation, ReadOperation
+from haolib.pipelines import PipelineValidationError, PipelineValidator
 from haolib.storages.indexes.params import ParamIndex
-from haolib.storages.operations.validator import PipelineValidationError, PipelineValidator
 from haolib.storages.targets.abstract import AbstractDataTarget
 from tests.integration.storages.conftest import User
 
 if TYPE_CHECKING:
-    from haolib.storages.operations.base import Operation, Pipeline
+    from haolib.pipelines.base import Operation, Pipeline
 
 
 class MockDataTarget:
@@ -37,10 +38,17 @@ class TestPipelineValidator:
         """Test validation of valid pipeline."""
         # Valid pipeline: read with target -> filter -> create with target
 
+        # Note: This test uses direct Operation classes since validator tests
+        # the validation logic, not the fluent API
+        from haolib.pipelines.base import TargetBoundOperation
+        from haolib.pipelines.operations import CreateOperation, ReadOperation
+        
+        read_op = TargetBoundOperation(operation=ReadOperation(search_index=ParamIndex(User)), target=mock_storage)
+        create_op = TargetBoundOperation(operation=CreateOperation(data=[lambda users: users]), target=mock_storage)
         pipeline: Pipeline[Any, Any, Any] = (
-            reado(search_index=ParamIndex(User)) ^ mock_storage
+            read_op
             | filtero(lambda u: u.age >= 18)
-            | createo([lambda users: users]) ^ mock_storage
+            | create_op
         )
 
         validator = PipelineValidator()
@@ -63,7 +71,7 @@ class TestPipelineValidator:
     def test_validate_read_without_target(self) -> None:
         """Test validation fails when read operation has no target."""
         # Invalid: read requires target but is not bound
-        pipeline = reado(search_index=ParamIndex(User))
+        pipeline = ReadOperation(search_index=ParamIndex(User))
 
         validator = PipelineValidator()
         with pytest.raises(PipelineValidationError) as exc_info:
@@ -75,10 +83,12 @@ class TestPipelineValidator:
     def test_validate_create_without_target_but_with_previous_result(self) -> None:
         """Test validation passes when create receives previous result."""
         # Valid: create receives previous result from filter
+        from haolib.pipelines.base import TargetBoundOperation
+        
         pipeline: Pipeline[Any, Any, Any] = (
-            reado(search_index=ParamIndex(User)) ^ mock_storage
+            TargetBoundOperation(operation=ReadOperation(search_index=ParamIndex(User)), target=mock_storage)
             | filtero(lambda u: u.age >= 18)
-            | createo([lambda users: users])  # No target, but receives previous result
+            | CreateOperation(data=[lambda users: users])  # No target, but receives previous result
         )
 
         validator = PipelineValidator()
@@ -88,7 +98,7 @@ class TestPipelineValidator:
     def test_validate_create_without_target_and_without_previous_result(self) -> None:
         """Test validation fails when create has no target and no previous result."""
         # Invalid: create has no data and no previous result
-        pipeline = createo()
+        pipeline = CreateOperation(data=[])
 
         validator = PipelineValidator()
         with pytest.raises(PipelineValidationError) as exc_info:
@@ -100,7 +110,7 @@ class TestPipelineValidator:
     def test_validate_create_without_target_but_with_data(self) -> None:
         """Test validation passes when create has data but no target."""
         # Valid: create has explicit data, doesn't need target or previous_result
-        pipeline = createo([User(name="Alice", age=25, email="alice@example.com")])
+        pipeline = CreateOperation(data=[User(name="Alice", age=25, email="alice@example.com")])
 
         validator = PipelineValidator()
         # Should not raise - create has data
@@ -108,7 +118,7 @@ class TestPipelineValidator:
 
     def test_validate_map_without_previous_operation(self) -> None:
         """Test validation fails when map is first operation."""
-        from haolib.storages.operations.base import Pipeline
+        from haolib.pipelines.base import Pipeline
 
         # Invalid: map requires previous result but is first
         pipeline: Pipeline[Any, Any, Any] = mapo(lambda u, idx: u.name)
@@ -121,7 +131,7 @@ class TestPipelineValidator:
 
     def test_validate_reduce_without_previous_operation(self) -> None:
         """Test validation fails when reduce is first operation."""
-        from haolib.storages.operations.base import Pipeline
+        from haolib.pipelines.base import Pipeline
 
         # Invalid: reduce requires previous result but is first
         pipeline: Pipeline[Any, Any, Any] = reduceo(lambda acc, u: acc + u.age, 0)
@@ -134,7 +144,7 @@ class TestPipelineValidator:
 
     def test_validate_transform_without_previous_operation(self) -> None:
         """Test validation fails when transform is first operation."""
-        from haolib.storages.operations.base import Pipeline
+        from haolib.pipelines.base import Pipeline
 
         # Invalid: transform requires previous result but is first
         pipeline: Pipeline[Any, Any, Any] = transformo(lambda users: [u.name for u in users])
@@ -147,16 +157,16 @@ class TestPipelineValidator:
 
     def test_validate_complex_valid_pipeline(self) -> None:
         """Test validation of complex valid pipeline."""
-        from haolib.storages.operations.base import Pipeline
+        from haolib.pipelines.base import Pipeline, TargetBoundOperation
 
         # Valid complex pipeline
         pipeline: Pipeline[Any, Any, Any] = (
-            reado(search_index=ParamIndex(User)) ^ mock_storage
+            TargetBoundOperation(operation=ReadOperation(search_index=ParamIndex(User)), target=mock_storage)
             | filtero(lambda u: u.age >= 18)
             | mapo(lambda u, idx: u.name)
             | reduceo(lambda acc, name: acc + len(name), 0)
             | transformo(lambda total: str(total))
-            | createo([lambda data: data]) ^ mock_storage
+            | TargetBoundOperation(operation=CreateOperation(data=[lambda data: data]), target=mock_storage)
         )
 
         validator = PipelineValidator()
@@ -165,13 +175,13 @@ class TestPipelineValidator:
 
     def test_validate_pipeline_with_intermediate_operation_missing_target(self) -> None:
         """Test validation fails when intermediate operation needs target but doesn't have it."""
-        from haolib.storages.operations.base import Pipeline
+        from haolib.pipelines.base import Pipeline, TargetBoundOperation
 
         # Invalid: read in middle of pipeline without target
         pipeline: Pipeline[Any, Any, Any] = (
-            reado(search_index=ParamIndex(User)) ^ mock_storage
+            TargetBoundOperation(operation=ReadOperation(search_index=ParamIndex(User)), target=mock_storage)
             | filtero(lambda u: u.age >= 18)
-            | reado(search_index=ParamIndex(User))  # Missing target
+            | ReadOperation(search_index=ParamIndex(User))  # Missing target
         )
 
         validator = PipelineValidator()
@@ -184,10 +194,10 @@ class TestPipelineValidator:
 
     def test_validate_pipeline_method(self) -> None:
         """Test that Pipeline.validate() method works."""
-        from haolib.storages.operations.base import Pipeline
+        from haolib.pipelines.base import Pipeline, TargetBoundOperation
 
         # Valid pipeline
-        pipeline: Pipeline[Any, Any, Any] = reado(search_index=ParamIndex(User)) ^ mock_storage | filtero(
+        pipeline: Pipeline[Any, Any, Any] = TargetBoundOperation(operation=ReadOperation(search_index=ParamIndex(User)), target=mock_storage) | filtero(
             lambda u: u.age >= 18
         )
 
@@ -196,10 +206,10 @@ class TestPipelineValidator:
 
     def test_validate_pipeline_method_raises_error(self) -> None:
         """Test that Pipeline.validate() method raises error for invalid pipeline."""
-        from haolib.storages.operations.base import Pipeline
+        from haolib.pipelines.base import Pipeline
 
         # Invalid pipeline - read without target
-        read_op = reado(search_index=ParamIndex(User))
+        read_op = ReadOperation(search_index=ParamIndex(User))
         # Create a pipeline with read without target (invalid)
         invalid_pipeline = Pipeline(first=read_op, second=read_op)
 
@@ -208,12 +218,11 @@ class TestPipelineValidator:
 
     def test_validate_map_bound_to_target(self) -> None:
         """Test validation fails when map operation is bound to target."""
-        from haolib.storages.operations.base import Pipeline  # Moved import here
+        from haolib.pipelines.base import Pipeline, TargetBoundOperation  # Moved import here
 
         # Invalid: map requires previous result but is bound to target
         pipeline: Pipeline[Any, Any, Any] = (
-            reado(search_index=ParamIndex(User)) ^ mock_storage
-            | mapo(lambda u, _idx: u.name) ^ mock_storage
+            TargetBoundOperation(operation=ReadOperation(search_index=ParamIndex(User)), target=mock_storage) | mapo(lambda u, _idx: u.name) ^ mock_storage
         )
 
         validator = PipelineValidator()
@@ -226,12 +235,11 @@ class TestPipelineValidator:
 
     def test_validate_filter_bound_to_target(self) -> None:
         """Test validation fails when filter operation is bound to target."""
-        from haolib.storages.operations.base import Pipeline  # Moved import here
+        from haolib.pipelines.base import Pipeline, TargetBoundOperation  # Moved import here
 
         # Invalid: filter requires previous result but is bound to target
         pipeline: Pipeline[Any, Any, Any] = (
-            reado(search_index=ParamIndex(User)) ^ mock_storage
-            | filtero(lambda u: u.age >= 18) ^ mock_storage
+            TargetBoundOperation(operation=ReadOperation(search_index=ParamIndex(User)), target=mock_storage) | filtero(lambda u: u.age >= 18) ^ mock_storage
         )
 
         validator = PipelineValidator()
@@ -243,12 +251,11 @@ class TestPipelineValidator:
 
     def test_validate_reduce_bound_to_target(self) -> None:
         """Test validation fails when reduce operation is bound to target."""
-        from haolib.storages.operations.base import Pipeline  # Moved import here
+        from haolib.pipelines.base import Pipeline, TargetBoundOperation  # Moved import here
 
         # Invalid: reduce requires previous result but is bound to target
         pipeline: Pipeline[Any, Any, Any] = (
-            reado(search_index=ParamIndex(User)) ^ mock_storage
-            | reduceo(lambda acc, u: acc + u.age, 0) ^ mock_storage
+            TargetBoundOperation(operation=ReadOperation(search_index=ParamIndex(User)), target=mock_storage) | reduceo(lambda acc, u: acc + u.age, 0) ^ mock_storage
         )
 
         validator = PipelineValidator()
@@ -260,11 +267,11 @@ class TestPipelineValidator:
 
     def test_validate_transform_bound_to_target(self) -> None:
         """Test validation fails when transform operation is bound to target."""
-        from haolib.storages.operations.base import Pipeline  # Moved import here
+        from haolib.pipelines.base import Pipeline, TargetBoundOperation  # Moved import here
 
         # Invalid: transform requires previous result but is bound to target
         pipeline: Pipeline[Any, Any, Any] = (
-            reado(search_index=ParamIndex(User)) ^ mock_storage
+            TargetBoundOperation(operation=ReadOperation(search_index=ParamIndex(User)), target=mock_storage)
             | transformo(lambda users: [u.name for u in users]) ^ mock_storage
         )
 

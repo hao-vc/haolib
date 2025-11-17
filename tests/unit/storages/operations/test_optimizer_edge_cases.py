@@ -2,8 +2,8 @@
 
 import pytest
 
+from haolib.pipelines.operations import MapOperation, ReduceOperation, TransformOperation
 from haolib.storages.data_types.registry import DataTypeRegistry
-from haolib.storages.operations.concrete import MapOperation, ReduceOperation, TransformOperation
 from haolib.storages.operations.optimizer.sqlalchemy import SQLAlchemyPipelineOptimizer
 
 

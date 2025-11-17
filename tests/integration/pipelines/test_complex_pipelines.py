@@ -23,7 +23,7 @@ from haolib.database.files.s3.clients.abstract import (
 )
 from haolib.database.files.s3.clients.pydantic import S3DeleteObjectsDelete, S3DeleteObjectsDeleteObject
 from haolib.storages.data_types.registry import DataTypeRegistry
-from haolib.storages.dsl import createo, deleteo, filtero, mapo, reado, reduceo, transformo, updateo
+from haolib.pipelines import filtero, mapo, reduceo, transformo
 from haolib.storages.indexes.params import ParamIndex
 from haolib.storages.indexes.path import PathIndex
 from haolib.storages.indexes.sql import SQLQueryIndex
@@ -56,9 +56,9 @@ class TestComplexPipelines:
 
         # Create in SQL -> Transform -> Save to S3 -> Count (avoiding duplicate creation)
         result = await (
-            createo(users) ^ sqlalchemy_storage
+            sqlalchemy_storage.create(users).returning()
             | mapo(lambda user, _idx: {"name": user.name, "age": user.age, "email": user.email})
-            | createo() ^ s3_storage
+            | s3_storage.create()
             | mapo(lambda data, _idx: data[0])  # Extract dict from tuple
             | reduceo(lambda acc, d: acc + 1, 0)
         ).execute()
@@ -80,7 +80,7 @@ class TestComplexPipelines:
 
         # Create -> Filter (age >= 30) -> Map (extract age) -> Reduce (sum)
         result = await (
-            createo(users) ^ sqlalchemy_storage
+            sqlalchemy_storage.create(users).returning()
             | filtero(lambda user: user.age >= 30)
             | mapo(lambda user, _idx: user.age)
             | reduceo(lambda acc, age: acc + age, 0)
@@ -102,10 +102,10 @@ class TestComplexPipelines:
 
         # SQL -> S3 (test multiple storage switches by creating separately)
         # First create in SQL
-        await (createo(users) ^ sqlalchemy_storage).execute()
+        await sqlalchemy_storage.create(users).returning().execute()
 
         # Then create in S3 (returns tuples)
-        result = await (createo(users) ^ s3_storage).execute()
+        result = await s3_storage.create(users).returning().execute()
 
         assert len(result) == 2
         assert all(isinstance(item, tuple) and len(item) == 2 for item in result)
@@ -118,7 +118,7 @@ class TestComplexPipelines:
         """Test pipeline with empty results."""
         # Read non-existent data -> Filter -> Map -> Reduce
         result = await (
-            reado(search_index=ParamIndex(User, email="nonexistent@example.com")) ^ sqlalchemy_storage
+            sqlalchemy_storage.read(ParamIndex(User, email="nonexistent@example.com")).returning()
             | filtero(lambda user: user.age > 20)
             | mapo(lambda user, _idx: user.name)
             | reduceo(lambda acc, name: acc + name, "")
@@ -135,7 +135,7 @@ class TestComplexPipelines:
         user = User(name="Alice", age=25, email="alice@example.com")
 
         result = await (
-            createo([user]) ^ sqlalchemy_storage
+            sqlalchemy_storage.create([user]).returning()
             | filtero(lambda u: u.age > 20)
             | mapo(lambda u, _idx: u.name.upper())
             | reduceo(lambda acc, name: acc + name, "")
@@ -154,7 +154,7 @@ class TestComplexPipelines:
 
         # Create -> Filter (age >= 25) -> Map (age) -> Reduce (sum)
         result = await (
-            createo(users) ^ sqlalchemy_storage
+            sqlalchemy_storage.create(users).returning()
             | filtero(lambda user: user.age >= 25)
             | mapo(lambda user, _idx: user.age)
             | reduceo(lambda acc, age: acc + age, 0)
@@ -178,7 +178,7 @@ class TestComplexPipelines:
 
         # Multiple filters and maps
         result = await (
-            createo(users) ^ sqlalchemy_storage
+            sqlalchemy_storage.create(users).returning()
             | filtero(lambda u: u.age >= 25)
             | mapo(lambda u, _idx: {"name": u.name, "age": u.age})
             | filtero(lambda d: len(d["name"]) >= 3)  # Changed to >= to include BOB
@@ -202,16 +202,12 @@ class TestComplexPipelines:
             User(name="Bob", age=30, email="bob@example.com"),
         ]
 
-        await (createo(users) ^ sqlalchemy_storage).execute()
+        await sqlalchemy_storage.create(users).returning().execute()
 
-        # Read -> Transform -> Update (use updateo instead of createo to avoid unique constraint)
+        # Read -> Transform -> Update (use patcho for partial update)
         result = await (
-            reado(search_index=ParamIndex(User, email="alice@example.com")) ^ sqlalchemy_storage
-            | updateo(
-                search_index=ParamIndex(User, email="alice@example.com"),
-                patch={"age": 26},
-            )
-            ^ sqlalchemy_storage
+            sqlalchemy_storage.read(ParamIndex(User, email="alice@example.com")).returning()
+            | sqlalchemy_storage.patch({"age": 26})
         ).execute()
 
         assert len(result) == 1
@@ -222,7 +218,7 @@ class TestComplexPipelines:
         self,
         sqlalchemy_storage: SQLAlchemyStorage,
     ) -> None:
-        """Test createo() without data uses previous_result."""
+        """Test create() without data uses previous_result."""
         users = [
             User(name="Alice", age=25, email="alice@example.com"),
             User(name="Bob", age=30, email="bob@example.com"),
@@ -230,7 +226,7 @@ class TestComplexPipelines:
 
         # Create -> Filter -> Count (without creating again to avoid unique constraint)
         result = await (
-            createo(users) ^ sqlalchemy_storage | filtero(lambda u: u.age >= 30) | reduceo(lambda acc, u: acc + 1, 0)
+            sqlalchemy_storage.create(users).returning() | filtero(lambda u: u.age >= 30) | reduceo(lambda acc, u: acc + 1, 0)
         ).execute()
 
         assert result == 1  # Only Bob
@@ -240,16 +236,16 @@ class TestComplexPipelines:
         self,
         sqlalchemy_storage: SQLAlchemyStorage,
     ) -> None:
-        """Test createo() as pass-through operation."""
+        """Test create() as pass-through operation."""
         users = [
             User(name="Alice", age=25, email="alice@example.com"),
             User(name="Bob", age=30, email="bob@example.com"),
         ]
 
-        # Create -> Pass through createo() -> Filter -> Count
+        # Create -> Pass through create() -> Filter -> Count
         result = await (
-            createo(users) ^ sqlalchemy_storage
-            | createo()  # Pass through without saving
+            sqlalchemy_storage.create(users).returning()
+            | sqlalchemy_storage.create()  # Pass through without saving
             | filtero(lambda u: u.age >= 30)
             | reduceo(lambda acc, u: acc + 1, 0)
         ).execute()
@@ -271,9 +267,9 @@ class TestComplexPipelines:
 
         # SQL -> Transform -> S3 -> Transform -> Filter -> Count
         result = await (
-            createo(users) ^ sqlalchemy_storage
+            sqlalchemy_storage.create(users).returning()
             | mapo(lambda u, _idx: {"name": u.name.upper(), "age": u.age, "email": u.email})
-            | createo() ^ s3_storage
+            | s3_storage.create()
             | mapo(lambda data, _idx: data[0])  # Extract dict from tuple
             | mapo(lambda d, _idx: d["age"])  # Extract age
             | filtero(lambda age: age >= 30)
@@ -294,16 +290,12 @@ class TestComplexPipelines:
         ]
 
         # Create -> Read -> Update -> Delete
-        await (createo(users) ^ sqlalchemy_storage).execute()
+        await sqlalchemy_storage.create(users).returning().execute()
 
         deleted_count = await (
-            reado(search_index=ParamIndex(User, email="alice@example.com")) ^ sqlalchemy_storage
-            | updateo(
-                search_index=ParamIndex(User, email="alice@example.com"),
-                patch={"age": 26},
-            )
-            ^ sqlalchemy_storage
-            | deleteo(search_index=ParamIndex(User, email="alice@example.com")) ^ sqlalchemy_storage
+            sqlalchemy_storage.read(ParamIndex(User, email="alice@example.com")).returning()
+            | sqlalchemy_storage.patch({"age": 26})
+            | sqlalchemy_storage.delete()
         ).execute()
 
         assert deleted_count == 1
@@ -323,7 +315,7 @@ class TestComplexPipelines:
 
         # Create -> Filter (age >= 30) -> Filter (name starts with 'C' or 'D') -> Count
         result = await (
-            createo(users) ^ sqlalchemy_storage
+            sqlalchemy_storage.create(users).returning()
             | filtero(lambda u: u.age >= 30)
             | filtero(lambda u: u.name.startswith("C") or u.name.startswith("D"))
             | reduceo(lambda acc, u: acc + 1, 0)
@@ -344,7 +336,7 @@ class TestComplexPipelines:
 
         # Create -> Map (name) -> Map (upper) -> Map (reverse) -> Reduce
         result = await (
-            createo(users) ^ sqlalchemy_storage
+            sqlalchemy_storage.create(users).returning()
             | mapo(lambda u, _idx: u.name)
             | mapo(lambda name, _idx: name.upper())
             | mapo(lambda name, _idx: name[::-1])
@@ -367,7 +359,7 @@ class TestComplexPipelines:
 
         # Create -> Transform (calculate statistics)
         result = await (
-            createo(users) ^ sqlalchemy_storage
+            sqlalchemy_storage.create(users).returning()
             | transformo(
                 lambda users: {
                     "count": len(users),
@@ -393,11 +385,11 @@ class TestComplexPipelines:
             User(name="Charlie", age=35, email="charlie@example.com"),
         ]
 
-        await (createo(users) ^ sqlalchemy_storage).execute()
+        await sqlalchemy_storage.create(users).returning().execute()
 
         # Read with SQLQueryIndex -> Filter -> Map
         result = await (
-            reado(search_index=SQLQueryIndex(query=select(UserModel).where(UserModel.age >= 30))) ^ sqlalchemy_storage
+            sqlalchemy_storage.read(SQLQueryIndex(query=select(UserModel).where(UserModel.age >= 30))).returning()
             | filtero(lambda u: len(u.name) >= 3)  # Changed to >= to include Bob
             | mapo(lambda u, _idx: u.name)
         ).execute()
@@ -417,16 +409,12 @@ class TestComplexPipelines:
             User(name="Bob", age=30, email="bob@example.com"),
         ]
 
-        await (createo(users) ^ sqlalchemy_storage).execute()
+        await sqlalchemy_storage.create(users).returning().execute()
 
-        # Update with SQLQueryIndex
-        result = await (
-            updateo(
-                search_index=SQLQueryIndex(query=select(UserModel).where(UserModel.age >= 30)),
-                patch={"age": 31},
-            )
-            ^ sqlalchemy_storage
-        ).execute()
+        # Update with SQLQueryIndex (use patcho for partial update)
+        result = await sqlalchemy_storage.read(
+            SQLQueryIndex(query=select(UserModel).where(UserModel.age >= 30))
+        ).patch({"age": 31}).returning().execute()
 
         assert len(result) == 1
         assert result[0].age == 31
@@ -444,12 +432,12 @@ class TestComplexPipelines:
             User(name="Charlie", age=35, email="charlie@example.com"),
         ]
 
-        await (createo(users) ^ sqlalchemy_storage).execute()
+        await sqlalchemy_storage.create(users).returning().execute()
 
         # Delete with SQLQueryIndex
-        deleted_count = await (
-            deleteo(search_index=SQLQueryIndex(query=select(UserModel).where(UserModel.age >= 30))) ^ sqlalchemy_storage
-        ).execute()
+        deleted_count = await sqlalchemy_storage.read(
+            SQLQueryIndex(query=select(UserModel).where(UserModel.age >= 30))
+        ).delete().execute()
 
         assert deleted_count == 2  # Bob and Charlie
 
@@ -467,10 +455,10 @@ class TestComplexPipelines:
 
         # SQL -> S3 (returns tuples) -> Extract data -> Count
         # First create in SQL
-        await (createo(users) ^ sqlalchemy_storage).execute()
+        await sqlalchemy_storage.create(users).returning().execute()
 
         # Then create in S3 (returns tuples)
-        s3_result = await (createo(users) ^ s3_storage).execute()
+        s3_result = await s3_storage.create(users).returning().execute()
 
         # Extract data from tuples and count
         result = len([data[0] for data in s3_result])
@@ -482,7 +470,7 @@ class TestComplexPipelines:
         sqlalchemy_storage: SQLAlchemyStorage,
     ) -> None:
         """Test create with empty list."""
-        result = await (createo([]) ^ sqlalchemy_storage).execute()
+        result = await sqlalchemy_storage.create([]).returning().execute()
 
         assert result == []
 
@@ -494,7 +482,7 @@ class TestComplexPipelines:
         """Test reduce with empty list."""
         # Read non-existent -> Reduce
         result = await (
-            reado(search_index=ParamIndex(User, email="nonexistent@example.com")) ^ sqlalchemy_storage
+            sqlalchemy_storage.read(ParamIndex(User, email="nonexistent@example.com")).returning()
             | reduceo(lambda acc, u: acc + u.age, 0)
         ).execute()
 
@@ -516,10 +504,10 @@ class TestComplexPipelines:
 
         # Very complex pipeline: Create -> Filter -> Map -> S3 -> Map -> Filter -> Map -> Reduce
         result = await (
-            createo(users) ^ sqlalchemy_storage
+            sqlalchemy_storage.create(users).returning()
             | filtero(lambda u: u.age >= 30)
             | mapo(lambda u, _idx: {"name": u.name, "age": u.age})
-            | createo() ^ s3_storage
+            | s3_storage.create()
             | mapo(lambda data, _idx: data[0])  # Extract dict from tuple
             | mapo(lambda d, _idx: d["age"])  # Extract age
             | filtero(lambda age: age >= 35)
@@ -540,16 +528,13 @@ class TestComplexPipelines:
         ]
 
         # Create initial data
-        await (createo(users) ^ sqlalchemy_storage).execute()
+        await sqlalchemy_storage.create(users).returning().execute()
 
         # Read -> Update with callable (increment age)
+        # Use patcho for partial update
         result = await (
-            reado(search_index=ParamIndex(User, email="alice@example.com")) ^ sqlalchemy_storage
-            | updateo(
-                search_index=ParamIndex(User, email="alice@example.com"),
-                patch={"age": 26},
-            )
-            ^ sqlalchemy_storage
+            sqlalchemy_storage.read(ParamIndex(User, email="alice@example.com")).returning()
+            | sqlalchemy_storage.patch({"age": 26})
         ).execute()
 
         assert len(result) == 1
@@ -567,13 +552,13 @@ class TestComplexPipelines:
             User(name="Charlie", age=35, email="charlie@example.com"),
         ]
 
-        await (createo(users) ^ sqlalchemy_storage).execute()
+        await sqlalchemy_storage.create(users).returning().execute()
 
         # Read Alice -> Read Bob -> Combine
         result = await (
-            reado(search_index=ParamIndex(User, email="alice@example.com")) ^ sqlalchemy_storage
-            | createo()  # Pass through
-            | reado(search_index=ParamIndex(User, email="bob@example.com")) ^ sqlalchemy_storage
+            sqlalchemy_storage.read(ParamIndex(User, email="alice@example.com")).returning()
+            | sqlalchemy_storage.create()  # Pass through
+            | sqlalchemy_storage.read(ParamIndex(User, email="bob@example.com")).returning()
             | reduceo(lambda acc, u: acc + [u], [])
         ).execute()
 
@@ -592,25 +577,21 @@ class TestComplexPipelines:
         ]
 
         # Create -> Read -> Filter -> Map -> Transform -> Reduce -> Update -> Delete
-        await (createo(users) ^ sqlalchemy_storage).execute()
+        await sqlalchemy_storage.create(users).returning().execute()
 
         # Read -> Filter -> Map -> Transform -> Update
         result = await (
-            reado(search_index=ParamIndex(User, email="alice@example.com")) ^ sqlalchemy_storage
+            sqlalchemy_storage.read(ParamIndex(User, email="alice@example.com")).returning()
             | filtero(lambda u: u.age > 20)
             | transformo(lambda users: users[0] if users else None)
         ).execute()
 
         assert result is not None
         assert result.age == 25
-        # Update separately
-        updated = await (
-            updateo(
-                search_index=ParamIndex(User, email="alice@example.com"),
-                patch={"age": 26},
-            )
-            ^ sqlalchemy_storage
-        ).execute()
+        # Update separately (use patcho for partial update)
+        updated = await sqlalchemy_storage.read(
+            ParamIndex(User, email="alice@example.com")
+        ).patch({"age": 26}).returning().execute()
         assert updated[0].age == 26
 
     @pytest.mark.asyncio
@@ -627,7 +608,7 @@ class TestComplexPipelines:
 
         # Create -> Filter -> Map (conditional) -> Filter -> Count
         result = await (
-            createo(users) ^ sqlalchemy_storage
+            sqlalchemy_storage.create(users).returning()
             | filtero(lambda u: u.age >= 30)
             | mapo(lambda u, _idx: u.name.upper() if u.age >= 35 else u.name)
             | filtero(lambda name: name.isupper())
@@ -649,7 +630,7 @@ class TestComplexPipelines:
 
         # Create -> Map (name) -> Map (upper) -> Map (reverse) -> Reduce (join)
         result = await (
-            createo(users) ^ sqlalchemy_storage
+            sqlalchemy_storage.create(users).returning()
             | mapo(lambda u, _idx: u.name)
             | mapo(lambda name, _idx: name.upper())
             | mapo(lambda name, _idx: name[::-1])
@@ -673,14 +654,14 @@ class TestComplexPipelines:
 
         # Create -> Map (age) -> Reduce (sum) -> Transform (calculate stats)
         total = await (
-            createo(users) ^ sqlalchemy_storage | mapo(lambda u, _idx: u.age) | reduceo(lambda acc, age: acc + age, 0)
+            sqlalchemy_storage.create(users).returning() | mapo(lambda u, _idx: u.age) | reduceo(lambda acc, age: acc + age, 0)
         ).execute()
 
         assert total == 90
 
         # Calculate average
         avg = await (
-            reado(search_index=ParamIndex(User)) ^ sqlalchemy_storage
+            sqlalchemy_storage.read(ParamIndex(User)).returning()
             | mapo(lambda u, _idx: u.age)
             | transformo(lambda ages: sum(ages) / len(ages) if ages else 0)
         ).execute()
@@ -700,7 +681,7 @@ class TestComplexPipelines:
 
         # Create -> Filter (always true) -> Map -> Filter (always false) -> Reduce
         result = await (
-            createo(users) ^ sqlalchemy_storage
+            sqlalchemy_storage.create(users).returning()
             | filtero(lambda u: True)  # All pass
             | mapo(lambda u, _idx: u.name)
             | filtero(lambda name: False)  # None pass
@@ -722,7 +703,7 @@ class TestComplexPipelines:
 
         # Create -> Filter -> Filter -> Filter (same condition)
         result = await (
-            createo(users) ^ sqlalchemy_storage
+            sqlalchemy_storage.create(users).returning()
             | filtero(lambda u: u.age >= 30)
             | filtero(lambda u: u.age >= 30)
             | filtero(lambda u: u.age >= 30)
@@ -745,7 +726,7 @@ class TestComplexPipelines:
 
         # Create -> Filter (age >= 30) -> Filter (age < 35) -> Count
         result = await (
-            createo(users) ^ sqlalchemy_storage
+            sqlalchemy_storage.create(users).returning()
             | filtero(lambda u: u.age >= 30)
             | filtero(lambda u: u.age < 35)
             | reduceo(lambda acc, u: acc + 1, 0)
@@ -767,9 +748,9 @@ class TestComplexPipelines:
 
         # SQL (User objects) -> Map (dict) -> S3 (dict) -> Map (extract dict) -> Count
         result = await (
-            createo(users) ^ sqlalchemy_storage
+            sqlalchemy_storage.create(users).returning()
             | mapo(lambda u, _idx: {"name": u.name, "age": u.age, "email": u.email})
-            | createo() ^ s3_storage
+            | s3_storage.create()
             | mapo(lambda data, _idx: data[0])  # Extract dict from tuple
             | reduceo(lambda acc, d: acc + 1, 0)
         ).execute()

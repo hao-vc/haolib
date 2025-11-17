@@ -8,10 +8,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from haolib.database.models.base.sqlalchemy import SQLAlchemyBaseModel
+from haolib.pipelines.operations import FilterOperation, ReadOperation
 from haolib.storages.data_types.registry import DataTypeRegistry, TypeRegistration
 from haolib.storages.indexes.params import ParamIndex
 from haolib.storages.indexes.sql import SQLQueryIndex
-from haolib.storages.operations.concrete import FilterOperation, ReadOperation
 from haolib.storages.operations.optimizer.query_builder import QueryBuilder
 
 

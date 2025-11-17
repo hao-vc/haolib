@@ -10,7 +10,8 @@ from typing import Any
 
 from sqlalchemy.orm import DeclarativeBase, InstrumentedAttribute
 
-from haolib.storages.operations.concrete import FilterOperation
+# Import FilterOperation lazily to avoid circular import
+# FilterOperation is imported in methods that use it
 from haolib.utils.rattrs import rgetattr
 
 

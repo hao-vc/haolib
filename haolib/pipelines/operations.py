@@ -4,15 +4,23 @@ Each operation type has its own class with typed parameters.
 This allows for better type safety and IDE autocomplete.
 """
 
+from __future__ import annotations
+
 from collections.abc import AsyncIterator, Callable, Iterable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, TypeVar, overload
 
-from haolib.storages.indexes.abstract import SearchIndex
-from haolib.storages.operations.base import Operation, Pipeline, TargetBoundOperation
-
 if TYPE_CHECKING:
+    from haolib.pipelines.base import Operation, Pipeline, TargetBoundOperation
+    from haolib.storages.indexes.abstract import SearchIndex
     from haolib.storages.targets.abstract import AbstractDataTarget
+else:
+    # Import SearchIndex for runtime (needed for isinstance checks)
+    from haolib.storages.indexes.abstract import SearchIndex
+
+# Import Operation for runtime (needed for class inheritance)
+# Must be imported after TYPE_CHECKING block to avoid circular import
+from haolib.pipelines.base import Operation, Pipeline, TargetBoundOperation
 
 T_Data = TypeVar("T_Data")
 
@@ -67,6 +75,8 @@ class CreateOperation[T_Data](Operation[Iterable[T_Data], list[T_Data]]):
         other: Operation[Any, T_NextResult] | TargetBoundOperation[Any],
     ) -> Pipeline[Iterable[T_Data], list[T_Data], T_NextResult]:
         """Compose with next operation, preserving type information."""
+        from haolib.pipelines.base import Pipeline  # noqa: PLC0415
+
         return Pipeline(first=self, second=other)
 
 
@@ -141,6 +151,8 @@ class ReadOperation[T_Data](Operation[Any, AsyncIterator[T_Data]]):
         other: Operation[Any, T_NextResult] | TargetBoundOperation[Any],
     ) -> Pipeline[Any, AsyncIterator[T_Data], T_NextResult]:
         """Compose with next operation, preserving type information."""
+        from haolib.pipelines.base import Pipeline  # noqa: PLC0415
+
         return Pipeline(first=self, second=other)
 
 
@@ -151,24 +163,32 @@ class PatchOperation[T_Data](Operation[Any, list[T_Data]]):
     Updates only specified fields. For HTTP, uses PATCH method.
     For SQL, updates only specified columns.
 
+    Can work in two modes:
+    1. Search mode: uses search_index to find data to update
+    2. Pipeline mode: uses previous_result as data to update
+
     Example:
         ```python
         from haolib.storages.indexes import index
 
+        # Search mode
         user_index = index(User, id=123)
         await storage.execute(PatchOperation(
             search_index=user_index,
             patch={"is_active": True}
         ))
+
+        # Pipeline mode (using fluent API)
+        storage.read(user_index).returning() | storage.patch({"is_active": True})
         ```
 
     """
 
-    search_index: SearchIndex[T_Data]
-    """Index for finding data to update."""
+    search_index: SearchIndex[T_Data] | None = None
+    """Index for finding data to update (if no previous_result)."""
 
-    patch: dict[str, Any]
-    """Partial update specification (only specified fields are updated)."""
+    patch: dict[str, Any] | None = None
+    """Partial update specification (if no previous_result)."""
 
 
 @dataclass(frozen=True)
@@ -178,42 +198,58 @@ class UpdateOperation[T_Data](Operation[Any, list[T_Data]]):
     Replaces entire object. For HTTP, uses PUT method.
     For SQL, updates all fields.
 
+    Can work in two modes:
+    1. Search mode: uses search_index to find data, data to update
+    2. Pipeline mode: uses previous_result as data to update
+
     Example:
         ```python
         from haolib.storages.indexes import index
 
+        # Search mode
         user_index = index(User, id=123)
         await storage.execute(UpdateOperation(
             search_index=user_index,
             data=User(id=123, name="John", email="john@example.com", is_active=True)
         ))
+
+        # Pipeline mode (using fluent API)
+        storage.read(user_index).returning() | storage.update(data=lambda u: User(id=u.id, name=u.name.upper()))
         ```
 
     """
 
-    search_index: SearchIndex[T_Data]
-    """Index for finding data to update."""
+    search_index: SearchIndex[T_Data] | None = None
+    """Index for finding data to update (if no previous_result)."""
 
-    data: T_Data | Callable[[T_Data], T_Data]
-    """Full replacement data or transform function."""
+    data: T_Data | Callable[[T_Data], T_Data] | None = None
+    """Full replacement data or transform function (if no previous_result)."""
 
 
 @dataclass(frozen=True)
 class DeleteOperation[T_Data](Operation[Any, int]):
     """Delete data from storage with type-safe index.
 
+    Can work in two modes:
+    1. Search mode: uses search_index to find data to delete
+    2. Pipeline mode: uses previous_result as data to delete
+
     Example:
         ```python
         from haolib.storages.indexes import index
 
+        # Search mode
         user_index = index(User, id=123)
         deleted_count = await storage.execute(DeleteOperation(search_index=user_index))
+
+        # Pipeline mode (using fluent API)
+        storage.read(user_index).returning() | storage.delete()
         ```
 
     """
 
-    search_index: SearchIndex[T_Data]
-    """Typed search index for finding data to delete."""
+    search_index: SearchIndex[T_Data] | None = None
+    """Typed search index for finding data to delete (if no previous_result)."""
 
 
 @dataclass(frozen=True)
@@ -287,6 +323,8 @@ class FilterOperation[T_Data](Operation[Iterable[T_Data], list[T_Data]]):
         other: Operation[Any, T_NextResult] | TargetBoundOperation[Any],
     ) -> Pipeline[Iterable[T_Data], list[T_Data], T_NextResult]:
         """Compose with next operation, preserving type information."""
+        from haolib.pipelines.base import Pipeline  # noqa: PLC0415
+
         return Pipeline(first=self, second=other)
 
 
@@ -367,6 +405,8 @@ class MapOperation[T_Data, T_Result](Operation[Iterable[T_Data], list[T_Result]]
         other: Operation[Any, T_NextResult] | TargetBoundOperation[Any],
     ) -> Pipeline[Iterable[T_Data], list[T_Result], T_NextResult]:
         """Compose with next operation, preserving type information."""
+        from haolib.pipelines.base import Pipeline  # noqa: PLC0415
+
         return Pipeline(first=self, second=other)
 
 
@@ -427,6 +467,8 @@ class ReduceOperation[T_Data, T_Result](Operation[Iterable[T_Data], T_Result]):
         other: Operation[Any, T_NextResult] | TargetBoundOperation[Any],
     ) -> Pipeline[Iterable[T_Data], T_Result, T_NextResult]:
         """Compose with next operation, preserving type information."""
+        from haolib.pipelines.base import Pipeline  # noqa: PLC0415
+
         return Pipeline(first=self, second=other)
 
 
@@ -489,4 +531,6 @@ class TransformOperation[T_Data, T_Result](Operation[T_Data, T_Result]):
         other: Operation[Any, T_NextResult] | TargetBoundOperation[Any],
     ) -> Pipeline[T_Data, T_Result, T_NextResult]:
         """Compose with next operation, preserving type information."""
+        from haolib.pipelines.base import Pipeline  # noqa: PLC0415
+
         return Pipeline(first=self, second=other)

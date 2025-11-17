@@ -1,16 +1,15 @@
 """SQL query index for relational databases."""
 
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import Any, TypeVar
 
-from sqlalchemy import Select
-from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy import Delete, Select, Update
 
 from haolib.storages.indexes.abstract import SearchIndex
 
-if TYPE_CHECKING:
-    from haolib.storages.data_types.registry import DataTypeRegistry
-
 T_Data = TypeVar("T_Data")
+
+# Type alias for SQLAlchemy statements
+SQLStatement = Select[Any] | Update | Delete
 
 
 class SQLQueryIndex[T_Data](SearchIndex[T_Data]):
@@ -22,31 +21,38 @@ class SQLQueryIndex[T_Data](SearchIndex[T_Data]):
 
     Example:
         ```python
-        from sqlalchemy import select
+        from sqlalchemy import select, update
 
+        # For ReadOperation (using fluent API)
         index = SQLQueryIndex(
             query=select(UserModel).where(UserModel.email == "john@example.com")
         )
-        await storage.execute(reado(search_index=index))
+        await storage.read(index).returning().execute()
+
+        # For UpdateOperation (optimized, using fluent API)
+        update_index = SQLQueryIndex(
+            query=update(UserModel).where(UserModel.id == 1).values(name="John")
+        )
+        await storage.read(update_index).update(User(...)).returning().execute()
         ```
 
     """
 
     def __init__(
         self,
-        query: Select[Any],
+        query: SQLStatement,
     ) -> None:
         """Create SQL query index.
 
         Args:
-            query: SQLAlchemy query (Select, Update, Delete).
+            query: SQLAlchemy query (Select, Update, or Delete).
 
         """
         self.__haolib_query__ = query
 
     @property
-    def query(self) -> Select[Any]:
-        """SQLAlchemy query (Select, Update, Delete).
+    def query(self) -> SQLStatement:
+        """SQLAlchemy query (Select, Update, or Delete).
 
         Returns:
             SQLAlchemy query.

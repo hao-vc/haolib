@@ -15,20 +15,26 @@ import pytest
 from sqlalchemy import select, text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from haolib.storages.data_types.registry import DataTypeRegistry
-from haolib.storages.dsl import createo, deleteo, filtero, mapo, reado, reduceo, transformo, updateo
-from haolib.storages.indexes.params import ParamIndex
-from haolib.storages.indexes.sql import SQLQueryIndex
-from haolib.storages.operations.concrete import (
+from haolib.pipelines import (
+    PipelineAnalysis,
+    filtero,
+    mapo,
+    reduceo,
+    transformo,
+)
+from haolib.pipelines.operations import (
     CreateOperation,
     DeleteOperation,
     FilterOperation,
     MapOperation,
+    PatchOperation,
     ReadOperation,
     ReduceOperation,
     UpdateOperation,
 )
-from haolib.storages.operations.optimizer import PipelineAnalysis
+from haolib.storages.data_types.registry import DataTypeRegistry
+from haolib.storages.indexes.params import ParamIndex
+from haolib.storages.indexes.sql import SQLQueryIndex
 from haolib.storages.operations.sqlalchemy import SQLAlchemyOperationsHandler
 from tests.integration.storages.conftest import Base, User, UserModel
 
@@ -121,12 +127,12 @@ class TestEdgeCases:
             pass
 
         index = ParamIndex(data_type=UnregisteredType)
-        update_op = UpdateOperation(search_index=index, patch={"name": "test"})
+        patch_op = PatchOperation(search_index=index, patch={"name": "test"})
 
         with pytest.raises(ValueError, match="No storage model registered"):
             txn = sqlalchemy_storage._begin_transaction()
             async with txn:
-                await handler.execute_update(update_op, txn)
+                await handler.execute_patch(patch_op, txn)
 
     @pytest.mark.asyncio
     async def test_execute_update_empty_results(self, sqlalchemy_storage: Any, registry: Any) -> None:
@@ -139,11 +145,11 @@ class TestEdgeCases:
 
         # Update with non-existent ID
         index = ParamIndex(data_type=User, id=99999)
-        update_op = UpdateOperation(search_index=index, patch={"name": "Updated"})
+        patch_op = PatchOperation(search_index=index, patch={"name": "Updated"})
 
         txn = sqlalchemy_storage._begin_transaction()
         async with txn:
-            result = await handler.execute_update(update_op, txn)
+            result = await handler.execute_patch(patch_op, txn)
 
         assert result == []
 
@@ -162,7 +168,8 @@ class TestEdgeCases:
 
         # Update with non-existent ID
         index = ParamIndex(data_type=User, id=99999)
-        update_op = UpdateOperation(search_index=index, patch=update_func)
+        # For callable, use UpdateOperation with data
+        update_op = UpdateOperation(search_index=index, data=update_func)
 
         txn = sqlalchemy_storage._begin_transaction()
         async with txn:
@@ -204,7 +211,7 @@ class TestEdgeCases:
             return u
 
         index = ParamIndex(data_type=User, id=user_id)
-        UpdateOperation(search_index=index, patch=update_func)
+        update_op = UpdateOperation(search_index=index, data=update_func)
 
         # This will fail because we need registration for the index
         # But we can test the else branch in a different way
@@ -376,7 +383,7 @@ class TestRegistryEdgeCases:
         user_id = created[0].id
 
         index = ParamIndex(data_type=User, id=user_id)
-        update_op = UpdateOperation(search_index=index, patch={"name": "Updated"})
+        patch_op = PatchOperation(search_index=index, patch={"name": "Updated"})
 
         # Mock the registration variable to be None after it's set
         # This tests the defensive else branch at line 302
@@ -394,7 +401,7 @@ class TestRegistryEdgeCases:
         # This test verifies the normal path works
         txn = sqlalchemy_storage._begin_transaction()
         async with txn:
-            updated = await handler.execute_update(update_op, txn)
+            updated = await handler.execute_patch(patch_op, txn)
 
         assert len(updated) == 1
         assert updated[0].name == "Updated"
@@ -431,7 +438,8 @@ class TestRegistryEdgeCases:
 
         with patch.object(handler._registry, "get_for_storage_type", side_effect=mock_get_storage):
             index = ParamIndex(data_type=User, id=user_id)
-            update_op = UpdateOperation(search_index=index, patch=update_func)
+            # For callable, use UpdateOperation with data
+            update_op = UpdateOperation(search_index=index, data=update_func)
 
             txn = sqlalchemy_storage._begin_transaction()
             async with txn:
@@ -494,11 +502,11 @@ class TestUpdateEdgeCases:
 
         # Update user - should load relationships
         index = ParamIndex(data_type=User, id=user_id)
-        update_op = UpdateOperation(search_index=index, patch={"name": "UpdatedUser"})
+        patch_op = PatchOperation(search_index=index, patch={"name": "UpdatedUser"})
 
         txn = sqlalchemy_storage._begin_transaction()
         async with txn:
-            updated = await handler.execute_update(update_op, txn)
+            updated = await handler.execute_patch(patch_op, txn)
 
         assert len(updated) == 1
         assert updated[0].name == "UpdatedUser"
@@ -540,7 +548,8 @@ class TestUpdateEdgeCases:
         query = select(UserModel).where(UserModel.name == "TestNoReg")
         # Use User as data_type so get_for_user_type can find registration
         index = SQLQueryIndex(query=query)
-        update_op = UpdateOperation(search_index=index, patch=update_func)
+        # For callable, use UpdateOperation with data
+        update_op = UpdateOperation(search_index=index, data=update_func)
 
         # Mock get_for_storage_type to return None at line 349 to trigger else branch at 353
         # But get_for_user_type should still return registration for line 217
@@ -585,10 +594,10 @@ class TestSQLAlchemyExecutorEdgeCases:
     async def test_execute_pipeline_directly(self, sqlalchemy_storage: Any) -> None:
         """Test executing pipeline directly (line 96)."""
         users = [User(name="Alice", age=25, email="alice@example.com")]
-        await sqlalchemy_storage.execute(createo(users))
+        await sqlalchemy_storage.create(users).execute()
 
         index = ParamIndex(data_type=User)
-        pipeline = reado(search_index=index) | filtero(lambda u: u.age >= MIN_AGE)
+        pipeline = sqlalchemy_storage.read(index).returning() | filtero(lambda u: u.age >= MIN_AGE)
 
         result = await sqlalchemy_storage.execute(pipeline)
 
@@ -600,10 +609,10 @@ class TestSQLAlchemyExecutorEdgeCases:
     async def test_execute_nested_pipeline(self, sqlalchemy_storage: Any) -> None:
         """Test executing nested pipeline (line 143)."""
         users = [User(name="Bob", age=30, email="bob@example.com")]
-        await sqlalchemy_storage.execute(createo(users))
+        await sqlalchemy_storage.create(users).execute()
 
         index = ParamIndex(data_type=User)
-        inner_pipeline = reado(search_index=index) | filtero(lambda u: u.age >= MIN_AGE)
+        inner_pipeline = sqlalchemy_storage.read(index).returning() | filtero(lambda u: u.age >= MIN_AGE)
         outer_pipeline = inner_pipeline | mapo(lambda u, _idx: u.name)
 
         result = await sqlalchemy_storage.execute(outer_pipeline)
@@ -618,13 +627,14 @@ class TestSQLAlchemyExecutorEdgeCases:
 
         # Try to pass previous result to create
         index = ParamIndex(data_type=User)
-        await sqlalchemy_storage.execute(reado(search_index=index))
+        await sqlalchemy_storage.read(index).returning().execute()
 
         with pytest.raises(ValueError, match="CreateOperation cannot receive data"):
             # This should fail - create can't have previous result
             txn = sqlalchemy_storage._begin_transaction()
             async with txn:
-                await sqlalchemy_storage._executor._execute_operation(createo(users), txn, previous_result=[1, 2, 3])
+                from haolib.pipelines.operations import CreateOperation
+                await sqlalchemy_storage._executor._execute_operation(CreateOperation(data=users), txn, previous_result=[1, 2, 3])
 
     @pytest.mark.asyncio
     async def test_execute_read_with_previous_result_error(self, sqlalchemy_storage: Any) -> None:
@@ -634,42 +644,47 @@ class TestSQLAlchemyExecutorEdgeCases:
         with pytest.raises(ValueError, match="ReadOperation cannot receive data"):
             txn = sqlalchemy_storage._begin_transaction()
             async with txn:
+                from haolib.pipelines.operations import ReadOperation
                 await sqlalchemy_storage._executor._execute_operation(
-                    reado(search_index=index), txn, previous_result=[1, 2, 3]
+                    ReadOperation(search_index=index), txn, previous_result=[1, 2, 3]
                 )
 
     @pytest.mark.asyncio
-    async def test_execute_update_with_previous_result_error(self, sqlalchemy_storage: Any) -> None:
-        """Test error when UpdateOperation receives previous_result (lines 162-163)."""
+    async def test_execute_patch_with_previous_result_error(self, sqlalchemy_storage: Any) -> None:
+        """Test error when PatchOperation receives previous_result with incompatible type."""
         user = User(name="David", age=40, email="david@example.com")
-        created = await sqlalchemy_storage.execute(createo([user]))
+        created = await sqlalchemy_storage.create([user]).returning().execute()
         user_id = created[0].id
 
         index = ParamIndex(data_type=User, id=user_id)
 
-        with pytest.raises(ValueError, match="UpdateOperation cannot receive data"):
+        # Now PatchOperation can receive previous_result, but it should fail if types are incompatible
+        with pytest.raises(ValueError, match="No storage model registered"):
             txn = sqlalchemy_storage._begin_transaction()
             async with txn:
+                from haolib.pipelines.operations import PatchOperation
                 await sqlalchemy_storage._executor._execute_operation(
-                    updateo(search_index=index, patch={"name": "Updated"}),
+                    PatchOperation(search_index=index, patch={"name": "Updated"}),
                     txn,
-                    previous_result=[1, 2, 3],
+                    previous_result=[1, 2, 3],  # Incompatible type (int instead of User)
                 )
 
     @pytest.mark.asyncio
     async def test_execute_delete_with_previous_result_error(self, sqlalchemy_storage: Any) -> None:
-        """Test error when DeleteOperation receives previous_result (lines 168-169)."""
+        """Test error when DeleteOperation receives previous_result with incompatible type."""
         user = User(name="Eve", age=45, email="eve@example.com")
-        created = await sqlalchemy_storage.execute(createo([user]))
+        created = await sqlalchemy_storage.create([user]).returning().execute()
         user_id = created[0].id
 
         index = ParamIndex(data_type=User, id=user_id)
 
-        with pytest.raises(ValueError, match="DeleteOperation cannot receive data"):
+        # Now DeleteOperation can receive previous_result, but it should fail if types are incompatible
+        with pytest.raises(ValueError, match="No storage model registered"):
             txn = sqlalchemy_storage._begin_transaction()
             async with txn:
+                from haolib.pipelines.operations import DeleteOperation
                 await sqlalchemy_storage._executor._execute_operation(
-                    deleteo(search_index=index), txn, previous_result=[1, 2, 3]
+                    DeleteOperation(search_index=index), txn, previous_result=[1, 2, 3]  # Incompatible type (int instead of User)
                 )
 
     @pytest.mark.asyncio
@@ -730,7 +745,7 @@ class TestSQLAlchemyExecutorEdgeCases:
 
     @pytest.mark.asyncio
     async def test_build_optimized_operation_no_optimized_operation_error(self, sqlalchemy_storage: Any) -> None:
-        """Test error when analysis has no optimized_operation (lines 272-273)."""
+        """Test that method returns None when analysis has no optimized_operation."""
 
         analysis = PipelineAnalysis(
             can_execute_on_storage=False,
@@ -738,10 +753,11 @@ class TestSQLAlchemyExecutorEdgeCases:
             execution_plan="python",
         )
 
-        with pytest.raises(ValueError, match="No optimized operation in analysis"):
-            txn = sqlalchemy_storage._begin_transaction()
-            async with txn:
-                await sqlalchemy_storage._executor._build_optimized_operation_if_needed(analysis, txn)
+        # Now method returns None instead of raising error
+        txn = sqlalchemy_storage._begin_transaction()
+        async with txn:
+            result = await sqlalchemy_storage._executor._build_optimized_operation_if_needed(analysis, txn)
+            assert result is None
 
     # Test removed - transactions are now automatic and not exposed to users
 
@@ -753,10 +769,10 @@ class TestOptimizerEdgeCases:
     async def test_build_optimized_operation_no_filters(self, sqlalchemy_storage: Any) -> None:
         """Test _build_optimized_operation_if_needed when no filters (lines 278-285)."""
         users = [User(name="Alice", age=25, email="alice@example.com")]
-        await sqlalchemy_storage.execute(createo(users))
+        await sqlalchemy_storage.create(users).execute()
 
         index = ParamIndex(data_type=User)
-        pipeline = reado(search_index=index)
+        pipeline = sqlalchemy_storage.read(index).returning()
 
         # This should execute without building optimized query (no filters)
         result = await sqlalchemy_storage.execute(pipeline)
@@ -768,10 +784,10 @@ class TestOptimizerEdgeCases:
     async def test_build_optimized_operation_single_operation(self, sqlalchemy_storage: Any) -> None:
         """Test _build_optimized_operation_if_needed with single operation (line 276)."""
         users = [User(name="Bob", age=30, email="bob@example.com")]
-        await sqlalchemy_storage.execute(createo(users))
+        await sqlalchemy_storage.create(users).execute()
 
         index = ParamIndex(data_type=User)
-        read_op = reado(search_index=index)
+        read_op = sqlalchemy_storage.read(index).returning()
 
         # Single operation - should not trigger optimized query building
         result = await sqlalchemy_storage.execute(read_op)
@@ -783,7 +799,7 @@ class TestOptimizerEdgeCases:
     async def test_build_optimized_operation_no_optimized_result(self, sqlalchemy_storage: Any) -> None:
         """Test _build_optimized_operation_if_needed when optimized is None (line 284)."""
         # Create analysis with filters but optimizer returns None
-        from haolib.storages.operations.concrete import FilterOperation, ReadOperation
+        from haolib.pipelines.operations import FilterOperation, ReadOperation
 
         index = ParamIndex(data_type=User)
         read_op = ReadOperation(search_index=index)

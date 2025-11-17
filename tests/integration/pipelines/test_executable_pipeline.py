@@ -12,7 +12,7 @@ from haolib.database.files.s3.clients.abstract import (
     S3BucketAlreadyOwnedByYouClientException,
 )
 from haolib.storages.data_types.registry import DataTypeRegistry
-from haolib.storages.dsl import createo, filtero, mapo, reado, reduceo, transformo
+from haolib.pipelines import filtero, mapo, reduceo, transformo
 from haolib.storages.indexes.params import ParamIndex
 from haolib.storages.s3 import S3Storage
 from haolib.storages.sqlalchemy import SQLAlchemyStorage
@@ -75,16 +75,14 @@ class TestExecutablePipeline:
             User(name="Alice", age=ALICE_AGE, email="alice@example.com"),
             User(name="Bob", age=BOB_AGE, email="bob@example.com"),
         ]
-        await sql_storage.execute(createo(users))
+        await sql_storage.create(users).returning().execute()
 
         # Create pipeline: SQL -> reduce -> transform -> S3
-        # New syntax: operation ^ storage for binding, | for composition
-        # Both operators have same precedence (10), so they execute left-to-right
         pipeline = (
-            reado(search_index=ParamIndex(User)) ^ sql_storage  # Read all users
+            sql_storage.read(ParamIndex(User)).returning()  # Read all users
             | reduceo(lambda acc, u: acc + u.age, 0)
-            | transformo(lambda total: str(total).encode())
-            | createo() ^ s3_storage  # Uses previous_result
+            | transformo(lambda total_list: str(total_list[0]).encode() if isinstance(total_list, list) and len(total_list) == 1 else str(total_list).encode())
+            | s3_storage.create()  # Uses previous_result
         )
 
         # Execute pipeline
@@ -109,16 +107,14 @@ class TestExecutablePipeline:
             User(name="Alice", age=ALICE_AGE, email="alice@example.com"),
             User(name="Bob", age=BOB_AGE, email="bob@example.com"),
         ]
-        await sql_storage.execute(createo(users))
+        await sql_storage.create(users).returning().execute()
 
         # Create pipeline: SQL -> reduce -> transform -> S3
-        # New syntax: operation ^ storage for binding, | for composition
-        # Both operators have same precedence (10), so they execute left-to-right
         pipeline = (
-            reado(search_index=ParamIndex(User)) ^ sql_storage
+            sql_storage.read(ParamIndex(User)).returning()
             | reduceo(lambda acc, u: acc + u.age, 0)
-            | transformo(lambda total: str(total).encode())
-            | createo() ^ s3_storage  # Uses previous_result
+            | transformo(lambda total_list: str(total_list[0]).encode() if isinstance(total_list, list) and len(total_list) == 1 else str(total_list).encode())
+            | s3_storage.create()  # Uses previous_result
         )
 
         # Execute pipeline
@@ -144,15 +140,15 @@ class TestExecutablePipeline:
             User(name="Alice", age=ALICE_AGE, email="alice@example.com"),
             User(name="Bob", age=BOB_AGE, email="bob@example.com"),
         ]
-        await sql_storage.execute(createo(users))
+        await sql_storage.create(users).returning().execute()
 
         # Create pipeline: SQL -> filter -> create with additional data
         # previous_result (filtered users) should be prepended to [extra_user]
         extra_user = User(name="Charlie", age=40, email="charlie@example.com")
         pipeline = (
-            reado(search_index=ParamIndex(User)) ^ sql_storage
+            sql_storage.read(ParamIndex(User)).returning()
             | filtero(lambda u: u.age >= 30)
-            | createo([extra_user]) ^ s3_storage  # previous_result + [extra_user]
+            | s3_storage.create([extra_user])  # previous_result + [extra_user]
         )
 
         # Execute pipeline
@@ -179,15 +175,15 @@ class TestExecutablePipeline:
             User(name="Alice", age=ALICE_AGE, email="alice@example.com"),
             User(name="Bob", age=BOB_AGE, email="bob@example.com"),
         ]
-        await sql_storage.execute(createo(users))
+        await sql_storage.create(users).returning().execute()
 
         # Create pipeline: SQL -> filter -> map -> create in S3 -> transform
         # transformo should receive data from S3 create, not tuples
         pipeline = (
-            reado(search_index=ParamIndex(User)) ^ sql_storage
+            sql_storage.read(ParamIndex(User)).returning()
             | filtero(lambda u: u.age >= 30)
             | mapo(lambda u, _idx: u.name)
-            | createo() ^ s3_storage  # Returns tuples (data, path)
+            | s3_storage.create()  # Returns tuples (data, path)
             | transformo(lambda data: data)  # Should receive data, not tuples
         )
 

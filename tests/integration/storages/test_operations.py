@@ -8,19 +8,20 @@ from typing import Any
 
 import pytest
 
-from haolib.storages.dsl import createo, deleteo, filtero, mapo, reado, reduceo, transformo, updateo
-from haolib.storages.indexes.params import ParamIndex
-from haolib.storages.operations.base import Pipeline
-from haolib.storages.operations.concrete import (
+from haolib.pipelines import filtero, mapo, reduceo, transformo
+from haolib.pipelines.base import Pipeline
+from haolib.pipelines.operations import (
     CreateOperation,
     DeleteOperation,
     FilterOperation,
     MapOperation,
+    PatchOperation,
     ReadOperation,
     ReduceOperation,
     TransformOperation,
     UpdateOperation,
 )
+from haolib.storages.indexes.params import ParamIndex
 from haolib.storages.operations.sqlalchemy import SQLAlchemyOperationsHandler
 from tests.integration.storages.conftest import User, UserModel
 
@@ -165,13 +166,13 @@ class TestOperationsHandler:
             created = await handler.execute_create(create_op, txn)
         user_id = created[0].id
 
-        # Update user
+        # Update user (partial update)
         index = ParamIndex(data_type=User, id=user_id)
-        update_op = UpdateOperation(search_index=index, patch={"age": GRACE_UPDATED_AGE, "name": "Grace Updated"})
+        patch_op = PatchOperation(search_index=index, patch={"age": GRACE_UPDATED_AGE, "name": "Grace Updated"})
 
         txn = sqlalchemy_storage._begin_transaction()
         async with txn:
-            updated = await handler.execute_update(update_op, txn)
+            updated = await handler.execute_patch(patch_op, txn)
 
         assert len(updated) == SINGLE_USER_COUNT
         assert updated[0].id == user_id
@@ -180,8 +181,8 @@ class TestOperationsHandler:
         assert updated[0].email == "grace@example.com"
 
     @pytest.mark.asyncio
-    async def test_execute_update_with_callable_patch(self, sqlalchemy_storage: Any, registry: Any) -> None:
-        """Test execute_update with callable patch."""
+    async def test_execute_update_with_callable_data(self, sqlalchemy_storage: Any, registry: Any) -> None:
+        """Test execute_update with callable data."""
         handler = SQLAlchemyOperationsHandler(
             registry=registry,
             relationship_load_depth=2,
@@ -196,14 +197,12 @@ class TestOperationsHandler:
             created = await handler.execute_create(create_op, txn)
         user_id = created[0].id
 
-        # Update user with callable
+        # Update user with callable (full update)
         def update_user(u: User) -> User:
-            u.age += 1
-            u.name = "Henry Updated"
-            return u
+            return User(id=u.id, name="Henry Updated", age=u.age + 1, email=u.email)
 
         index = ParamIndex(data_type=User, id=user_id)
-        update_op = UpdateOperation(search_index=index, patch=update_user)
+        update_op = UpdateOperation(search_index=index, data=update_user)
 
         txn = sqlalchemy_storage._begin_transaction()
         async with txn:
@@ -411,7 +410,7 @@ class TestStorageOperations:
             User(name="Bob", age=BOB_AGE, email="bob@example.com"),
         ]
 
-        result = await sqlalchemy_storage.execute(createo(users))
+        result = await sqlalchemy_storage.create(users).returning().execute()
 
         assert len(result) == MIN_USERS_COUNT
         assert result[0].name == "Alice"
@@ -427,14 +426,11 @@ class TestStorageOperations:
             User(name="Charlie", age=KATE_AGE, email="charlie@example.com"),
             User(name="David", age=FRANK_AGE, email="david@example.com"),
         ]
-        await sqlalchemy_storage.execute(createo(users))
+        await sqlalchemy_storage.create(users).returning().execute()
 
         # Read all users
         index = ParamIndex(data_type=User)
-        read_result = await sqlalchemy_storage.execute(reado(search_index=index))
-
-        # read_result is now a list (collected inside transaction)
-        results = read_result
+        results = await sqlalchemy_storage.read(index).returning().execute()
 
         assert len(results) >= MIN_USERS_COUNT
         emails = {user.email for user in results}
@@ -446,14 +442,12 @@ class TestStorageOperations:
         """Test executing update operation."""
         # Create user
         user = User(name="Eve", age=EVE_AGE, email="eve@example.com")
-        created = await sqlalchemy_storage.execute(createo([user]))
+        created = await sqlalchemy_storage.create([user]).returning().execute()
         user_id = created[0].id
 
-        # Update user
+        # Update user (partial update)
         index = ParamIndex(data_type=User, id=user_id)
-        updated = await sqlalchemy_storage.execute(
-            updateo(search_index=index, patch={"age": GRACE_UPDATED_AGE, "name": "Eve Updated"}),
-        )
+        updated = await sqlalchemy_storage.read(index).patch({"age": GRACE_UPDATED_AGE, "name": "Eve Updated"}).returning().execute()
 
         assert len(updated) == SINGLE_USER_COUNT
         assert updated[0].name == "Eve Updated"
@@ -464,12 +458,12 @@ class TestStorageOperations:
         """Test executing delete operation."""
         # Create user
         user = User(name="Frank", age=IVAN_AGE, email="frank@example.com")
-        created = await sqlalchemy_storage.execute(createo([user]))
+        created = await sqlalchemy_storage.create([user]).returning().execute()
         user_id = created[0].id
 
         # Delete user
         index = ParamIndex(data_type=User, id=user_id)
-        deleted_count = await sqlalchemy_storage.execute(deleteo(search_index=index))
+        deleted_count = await sqlalchemy_storage.read(index).delete().execute()
 
         assert deleted_count == SINGLE_USER_COUNT
 
@@ -482,15 +476,17 @@ class TestStorageOperations:
             User(name="Henry", age=30, email="henry@example.com"),
             User(name="Iris", age=35, email="iris@example.com"),
         ]
-        await sqlalchemy_storage.execute(createo(users))
+        await sqlalchemy_storage.create(users).returning().execute()
 
         # Pipeline: read -> filter -> map (all in single transaction)
         index = ParamIndex(data_type=User)
         pipeline: Pipeline[Any, Any, Any] = (
-            reado(search_index=index) | filtero(lambda u: u.age >= FILTER_MIN_AGE) | mapo(lambda u, _idx: u.name)
+            sqlalchemy_storage.read(index).returning()
+            | filtero(lambda u: u.age >= FILTER_MIN_AGE)
+            | mapo(lambda u, _idx: u.name)
         )
 
-        result = await sqlalchemy_storage.execute(pipeline)
+        result = await pipeline.execute()
 
         assert len(result) >= MIN_USERS_COUNT
         assert "Henry" in result
@@ -504,7 +500,7 @@ class TestStorageOperations:
         ]
 
         # Execute without providing transaction - should create one automatically
-        result = await sqlalchemy_storage.execute(createo(users))
+        result = await sqlalchemy_storage.create(users).returning().execute()
 
         assert len(result) == SINGLE_USER_COUNT
         assert result[0].name == "Jack"
@@ -518,16 +514,16 @@ class TestStorageOperations:
             User(name="Kate", age=KATE_AGE, email="kate@example.com"),
             User(name="Leo", age=LEO_AGE, email="leo@example.com"),
         ]
-        await sqlalchemy_storage.execute(createo(users))
+        await sqlalchemy_storage.create(users).returning().execute()
 
         # Reduce to sum of ages
         index = ParamIndex(data_type=User)
-        pipeline = reado(search_index=index) | reduceo(
+        pipeline = sqlalchemy_storage.read(index).returning() | reduceo(
             reducer=lambda acc, user: acc + user.age,
             initial=0,
         )
 
-        total_age = await sqlalchemy_storage.execute(pipeline)
+        total_age = await pipeline.execute()
 
         assert total_age >= EXPECTED_TOTAL_AGE_2
 
@@ -539,14 +535,132 @@ class TestStorageOperations:
             User(name="Mary", age=MARY_AGE, email="mary@example.com"),
             User(name="Nick", age=NICK_AGE, email="nick@example.com"),
         ]
-        await sqlalchemy_storage.execute(createo(users))
+        await sqlalchemy_storage.create(users).returning().execute()
 
         # Transform to list of emails
         # Pipeline: read -> transform (transform needs previous result from pipeline)
         index = ParamIndex(data_type=User)
-        pipeline = reado(search_index=index) | transformo(transformer=lambda users: [u.email for u in users])
-        emails = await sqlalchemy_storage.execute(pipeline)
+        pipeline = sqlalchemy_storage.read(index).returning() | transformo(transformer=lambda users: [u.email for u in users])
+        emails = await pipeline.execute()
 
         assert len(emails) >= MIN_USERS_COUNT
         assert "mary@example.com" in emails
         assert "nick@example.com" in emails
+
+    @pytest.mark.asyncio
+    async def test_execute_read_update_pipeline(self, sqlalchemy_storage: Any) -> None:
+        """Test executing read | update pipeline (pipeline mode)."""
+        # Create user
+        users = [
+            User(name="PipelineUser", age=25, email="pipeline@example.com"),
+        ]
+        created = await sqlalchemy_storage.create(users).returning().execute()
+        user_id = created[0].id
+
+        # Read and update in pipeline
+        index = ParamIndex(data_type=User, id=user_id)
+        pipeline = sqlalchemy_storage.read(index).returning() | sqlalchemy_storage.update(
+            data=lambda u: User(id=u.id, name=u.name.upper(), age=u.age + 1, email=u.email)
+        )
+
+        updated = await pipeline.execute()
+
+        assert len(updated) == 1
+        assert updated[0].name == "PIPELINEUSER"
+        assert updated[0].age == 26
+
+    @pytest.mark.asyncio
+    async def test_execute_read_patch_pipeline(self, sqlalchemy_storage: Any) -> None:
+        """Test executing read | patch pipeline (pipeline mode)."""
+        # Create user
+        users = [
+            User(name="PatchUser", age=25, email="patch@example.com"),
+        ]
+        created = await sqlalchemy_storage.create(users).returning().execute()
+        user_id = created[0].id
+
+        # Read and patch in pipeline
+        index = ParamIndex(data_type=User, id=user_id)
+        pipeline = sqlalchemy_storage.read(index).returning() | sqlalchemy_storage.patch(patch={"age": 30})
+
+        updated = await pipeline.execute()
+
+        assert len(updated) == 1
+        assert updated[0].name == "PatchUser"
+        assert updated[0].age == 30
+
+    @pytest.mark.asyncio
+    async def test_execute_read_delete_pipeline(self, sqlalchemy_storage: Any) -> None:
+        """Test executing read | delete pipeline (pipeline mode)."""
+        # Create user
+        users = [
+            User(name="DeleteUser", age=25, email="delete@example.com"),
+        ]
+        created = await sqlalchemy_storage.create(users).returning().execute()
+        user_id = created[0].id
+
+        # Read and delete in pipeline
+        index = ParamIndex(data_type=User, id=user_id)
+        pipeline = sqlalchemy_storage.read(index).returning() | sqlalchemy_storage.delete()
+
+        deleted_count = await pipeline.execute()
+
+        assert deleted_count == 1
+
+        # Verify user is deleted - read should return empty iterator
+        read_index = ParamIndex(data_type=User, id=user_id)
+        read_result = await sqlalchemy_storage.read(read_index).returning().execute()
+        # reado returns AsyncIterator, collect it to verify it's empty
+        if hasattr(read_result, "__aiter__"):
+            users_list = [user async for user in read_result]
+            assert len(users_list) == 0
+        else:
+            # If it's already a list, just check it's empty
+            assert len(read_result) == 0
+
+    @pytest.mark.asyncio
+    async def test_execute_read_filter_update_pipeline(self, sqlalchemy_storage: Any) -> None:
+        """Test executing read | filter | update pipeline."""
+        # Create users
+        users = [
+            User(name="FilterUpdate1", age=25, email="filter1@example.com"),
+            User(name="FilterUpdate2", age=35, email="filter2@example.com"),
+        ]
+        await sqlalchemy_storage.create(users).returning().execute()
+
+        # Read, filter by age >= 30, and update
+        index = ParamIndex(data_type=User)
+        pipeline = (
+            sqlalchemy_storage.read(index).returning()
+            | filtero(lambda u: u.age >= 30)
+            | sqlalchemy_storage.update(data=lambda u: User(id=u.id, name=u.name.upper(), age=u.age, email=u.email))
+        )
+
+        updated = await pipeline.execute()
+
+        assert len(updated) == 1
+        assert updated[0].name == "FILTERUPDATE2"
+        assert updated[0].age == 35
+
+    @pytest.mark.asyncio
+    async def test_execute_read_map_update_pipeline(self, sqlalchemy_storage: Any) -> None:
+        """Test executing read | map | update pipeline."""
+        # Create user
+        users = [
+            User(name="MapUpdate", age=25, email="map@example.com"),
+        ]
+        created = await sqlalchemy_storage.create(users).returning().execute()
+        user_id = created[0].id
+
+        # Read, map to extract user, and update
+        index = ParamIndex(data_type=User, id=user_id)
+        pipeline = (
+            sqlalchemy_storage.read(index).returning()
+            | mapo(lambda u, idx: u)
+            | sqlalchemy_storage.update(data=lambda u: User(id=u.id, name=u.name + "_updated", age=u.age, email=u.email))
+        )
+
+        updated = await pipeline.execute()
+
+        assert len(updated) == 1
+        assert updated[0].name == "MapUpdate_updated"

@@ -13,7 +13,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
-from haolib.storages.dsl import createo, deleteo, filtero, mapo, reado, updateo
+from haolib.pipelines import filtero, mapo
 from haolib.storages.indexes.params import ParamIndex
 from haolib.storages.sqlalchemy import SQLAlchemyStorage
 from tests.integration.conftest import MockAppConfig
@@ -86,7 +86,7 @@ class TestLoadPerformance:
 
         # Benchmark async function directly
         async def create_users() -> Any:
-            return await real_sqlalchemy_storage.execute(createo(users))
+            return await real_sqlalchemy_storage.create(users).returning().execute()
 
         result = await benchmark(create_users)
 
@@ -101,12 +101,12 @@ class TestLoadPerformance:
             User(name=f"ReadUser{i}", age=25 + (i % 40), email=f"readuser{i}@example.com")
             for i in range(BULK_READ_COUNT)
         ]
-        await real_sqlalchemy_storage.execute(createo(users))
+        await real_sqlalchemy_storage.create(users).execute()
 
         index = ParamIndex(data_type=User)
 
         async def read_users() -> Any:
-            result = await real_sqlalchemy_storage.execute(reado(search_index=index))
+            result = await real_sqlalchemy_storage.read(index).returning().execute()
             # result is now a list (collected inside transaction)
             return result
 
@@ -123,10 +123,10 @@ class TestLoadPerformance:
             User(name=f"FilterUser{i}", age=20 + (i % 60), email=f"filteruser{i}@example.com")
             for i in range(BULK_CREATE_COUNT)
         ]
-        await real_sqlalchemy_storage.execute(createo(users))
+        await real_sqlalchemy_storage.create(users).execute()
 
         index = ParamIndex(data_type=User)
-        pipeline = reado(search_index=index) | filtero(lambda u: FILTER_MIN_AGE <= u.age <= FILTER_MAX_AGE)
+        pipeline = real_sqlalchemy_storage.read(index).returning() | filtero(lambda u: FILTER_MIN_AGE <= u.age <= FILTER_MAX_AGE)
 
         async def filter_users() -> Any:
             return await real_sqlalchemy_storage.execute(pipeline)
@@ -145,10 +145,10 @@ class TestLoadPerformance:
             User(name=f"PipelineUser{i}", age=25 + (i % 50), email=f"pipelineuser{i}@example.com")
             for i in range(BULK_READ_COUNT)
         ]
-        await real_sqlalchemy_storage.execute(createo(users))
+        await real_sqlalchemy_storage.create(users).execute()
 
         index = ParamIndex(data_type=User)
-        pipeline = reado(search_index=index) | filtero(lambda u: u.age >= FILTER_MIN_AGE) | mapo(lambda u, _idx: u.name)
+        pipeline = real_sqlalchemy_storage.read(index).returning() | filtero(lambda u: u.age >= FILTER_MIN_AGE) | mapo(lambda u, _idx: u.name)
 
         async def execute_pipeline() -> Any:
             return await real_sqlalchemy_storage.execute(pipeline)
@@ -176,11 +176,11 @@ class TestLoadPerformance:
             ]
 
             # Create
-            await real_sqlalchemy_storage.execute(createo(users))
+            await real_sqlalchemy_storage.create(users).execute()
 
             # Read back
             index = ParamIndex(data_type=User)
-            read_result = await real_sqlalchemy_storage.execute(reado(search_index=index))
+            read_result = await real_sqlalchemy_storage.read(index).returning().execute()
             # read_result is now a list (collected inside transaction)
             return read_result
 
@@ -211,13 +211,13 @@ class TestLoadPerformance:
         users = [
             User(name=f"UpdateUser{i}", age=25, email=f"updateuser{i}@example.com") for i in range(BULK_READ_COUNT)
         ]
-        await real_sqlalchemy_storage.execute(createo(users))
+        await real_sqlalchemy_storage.create(users).execute()
 
         # Update all users
         index = ParamIndex(data_type=User)
 
         async def update_users() -> Any:
-            return await real_sqlalchemy_storage.execute(updateo(search_index=index, patch={"age": UPDATE_AGE}))
+            return await real_sqlalchemy_storage.read(index).patch({"age": UPDATE_AGE}).returning().execute()
 
         result = await benchmark(update_users)
 
@@ -231,13 +231,13 @@ class TestLoadPerformance:
         users = [
             User(name=f"DeleteUser{i}", age=25, email=f"deleteuser{i}@example.com") for i in range(BULK_READ_COUNT)
         ]
-        await real_sqlalchemy_storage.execute(createo(users))
+        await real_sqlalchemy_storage.create(users).execute()
 
         # Delete users with age = 25
         index = ParamIndex(data_type=User, age=DELETE_AGE)
 
         async def delete_users() -> Any:
-            return await real_sqlalchemy_storage.execute(deleteo(search_index=index))
+            return await real_sqlalchemy_storage.read(index).delete().execute()
 
         result = await benchmark(delete_users)
 
@@ -263,7 +263,7 @@ class TestLoadPerformance:
                 )
                 for i in range(batch_size)
             ]
-            await real_sqlalchemy_storage.execute(createo(users))
+            await real_sqlalchemy_storage.create(users).execute()
 
         # Force garbage collection
 

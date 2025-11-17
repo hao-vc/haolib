@@ -8,7 +8,7 @@ Example:
         from haolib.pipelines import reduceo, transformo
         from haolib.storages.indexes.params import ParamIndex
 
-        # Fluent API: storage methods return composites
+        # Fluent API: storage methods return composites that can be chained
         pipeline = (
             sql_storage.read(ParamIndex(User)).returning()
             | reduceo(lambda acc, u: acc + u.age, 0)
@@ -30,12 +30,14 @@ Example:
 
 """
 
+from __future__ import annotations
+
 from abc import ABC
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Union, overload
 
 if TYPE_CHECKING:
-    from haolib.storages.operations.concrete import (
+    from haolib.pipelines.operations import (
         CreateOperation,
         FilterOperation,
         MapOperation,
@@ -43,6 +45,15 @@ if TYPE_CHECKING:
         TransformOperation,
     )
     from haolib.storages.targets.abstract import AbstractDataTarget
+else:
+    from typing import Protocol
+
+    class AbstractDataTarget(Protocol):  # noqa: D101
+        async def execute[T_Result](  # noqa: D102
+            self,
+            operation: Operation[Any, T_Result] | Pipeline[Any, Any, T_Result],
+        ) -> T_Result: ...
+
 
 # Type alias for operations that can be composed
 OperationLike = Union["Operation[Any, Any]", "Pipeline[Any, Any, Any]", "TargetBoundOperation[Any]"]
@@ -60,7 +71,7 @@ class Operation[T_Data, T_Result](ABC):
 
     Example:
         ```python
-        from haolib.storages.operations.concrete import ReadOperation, FilterOperation
+        from haolib.pipelines.operations import ReadOperation, FilterOperation
 
         op1 = ReadOperation(search_index=user_index)
         op2 = FilterOperation(predicate=lambda u: u.age >= 18)
@@ -129,7 +140,7 @@ class Pipeline[T_Data, T_FirstResult, T_SecondResult]:
 
     Example:
         ```python
-        from haolib.storages.operations.concrete import ReadOperation, FilterOperation
+        from haolib.pipelines.operations import ReadOperation, FilterOperation
 
         pipeline = (
             ReadOperation(search_index=user_index)
@@ -155,10 +166,10 @@ class Pipeline[T_Data, T_FirstResult, T_SecondResult]:
     )
     """Second operation in the pipeline."""
 
-    def __or__[T_NextResult](
+    def __or__(
         self,
-        other: Operation[Any, T_NextResult] | Pipeline[Any, Any, T_NextResult] | TargetBoundOperation[Any],
-    ) -> Pipeline[Any, T_SecondResult, T_NextResult]:
+        other: Operation[Any, Any] | Pipeline[Any, Any, Any] | TargetBoundOperation[Any] | Any,
+    ) -> Pipeline[Any, Any, Any]:
         """Continue the pipeline.
 
         Args:
@@ -168,6 +179,41 @@ class Pipeline[T_Data, T_FirstResult, T_SecondResult]:
             Extended pipeline.
 
         """
+        # Handle composites from fluent API
+        from haolib.storages.fluent.composites import BaseComposite  # noqa: PLC0415
+
+        if isinstance(other, BaseComposite):
+            # Extract operations from composite and build pipeline
+            other_ops = other._operations
+            if len(other_ops) == 1:
+                # Single operation - bind to storage
+                second_op: TargetBoundOperation[Any] = TargetBoundOperation(
+                    operation=other_ops[0], target=other._storage
+                )
+            else:
+                # Multiple operations - build pipeline and bind to storage
+                other_pipeline: Pipeline[Any, Any, Any] | Operation[Any, Any] = other_ops[0]
+                for op in other_ops[1:]:
+                    other_pipeline = Pipeline(first=other_pipeline, second=op)
+                second_op = TargetBoundOperation(operation=other_pipeline, target=other._storage)
+            return Pipeline(first=self, second=second_op)
+
+        # Check if operation needs previous_result (Python operations)
+        if isinstance(other, Operation):
+            from haolib.pipelines.operations import (  # noqa: PLC0415
+                DeleteOperation,
+                FilterOperation,
+                MapOperation,
+                PatchOperation,
+                ReduceOperation,
+                TransformOperation,
+                UpdateOperation,
+            )
+
+            # Python operations (Filter, Map, Reduce, Transform) should not be bound to storage
+            if isinstance(other, (FilterOperation, MapOperation, ReduceOperation, TransformOperation)):
+                return Pipeline(first=self, second=other)  # type: ignore[arg-type]
+
         return Pipeline(
             first=self,
             second=other,
@@ -186,10 +232,11 @@ class Pipeline[T_Data, T_FirstResult, T_SecondResult]:
 
         Example:
             ```python
+            from haolib.pipelines import filtero
             pipeline = (
                 sql_storage.read(user_index).returning()
                 | filtero(lambda u: u.age >= 18)
-            ) ^ sql_storage
+            )
             ```
 
         """
@@ -203,6 +250,7 @@ class Pipeline[T_Data, T_FirstResult, T_SecondResult]:
 
         Example:
             ```python
+            from haolib.pipelines import filtero
             pipeline = (
                 sql_storage.read(...).returning()
                 | filtero(lambda u: u.age >= 18)
@@ -276,15 +324,15 @@ class TargetBoundOperation[T_Result]:
     The ^ operator semantically means "send data to this target".
 
     Example:
-        ```python
-        from haolib.storages.indexes.params import ParamIndex
+            ```python
+            from haolib.storages.indexes.params import ParamIndex
 
-        # Storage target (using fluent API)
-        bound_op = sql_storage.read(ParamIndex(User)).returning()
+            # Storage target (using fluent API)
+            bound_op = sql_storage.read(ParamIndex(User)).returning()
 
-        # ML Model target (future)
-        # bound_op = ml_model.predict(...)
-        ```
+            # ML Model target (future)
+            # bound_op = ml_model.predict(...)
+            ```
 
     """
 
@@ -326,54 +374,6 @@ class TargetBoundOperation[T_Result]:
         """
         return await self.target.execute(self.operation)
 
-    @overload  # type: ignore[override]
-    def __or__(
-        self,
-        other: FilterOperation[T_Result],
-    ) -> Pipeline[Any, T_Result, list[T_Result]]: ...
-
-    @overload  # type: ignore[override]
-    def __or__(
-        self,
-        other: FilterOperation[Any],
-    ) -> Pipeline[Any, T_Result, list[T_Result]]: ...
-
-    @overload  # type: ignore[override]
-    def __or__[T_NextResult](
-        self,
-        other: MapOperation[T_Result, T_NextResult],
-    ) -> Pipeline[Any, T_Result, list[T_NextResult]]: ...
-
-    @overload  # type: ignore[override]
-    def __or__[T_NextResult](
-        self,
-        other: ReduceOperation[T_Result, T_NextResult],
-    ) -> Pipeline[Any, T_Result, T_NextResult]: ...
-
-    @overload  # type: ignore[override]
-    def __or__(
-        self,
-        other: ReduceOperation[Any, Any],
-    ) -> Pipeline[Any, T_Result, Any]: ...
-
-    @overload  # type: ignore[override]
-    def __or__[T_NextResult](
-        self,
-        other: TransformOperation[T_Result, T_NextResult],
-    ) -> Pipeline[Any, T_Result, T_NextResult]: ...
-
-    @overload  # type: ignore[override]
-    def __or__(
-        self,
-        other: CreateOperation[T_Result],
-    ) -> Pipeline[Any, T_Result, list[T_Result]]: ...
-
-    @overload  # type: ignore[override]
-    def __or__[T_NextResult](
-        self,
-        other: TargetBoundOperation[T_NextResult],
-    ) -> Pipeline[Any, T_Result, T_NextResult]: ...
-
     def __or__[T_NextResult](
         self,
         other: Operation[Any, T_NextResult] | TargetBoundOperation[Any],
@@ -411,8 +411,25 @@ class TargetBoundOperation[T_Result]:
             # Same target - continue normally
             return Pipeline(first=self, second=other)
 
-        # Next operation is not bound to target - execute in Python
-        return Pipeline(first=self, second=other)
+        # Next operation is not bound to target
+        # Check if it needs previous_result (Python operations)
+        from haolib.pipelines.operations import (  # noqa: PLC0415
+            DeleteOperation,
+            FilterOperation,
+            MapOperation,
+            PatchOperation,
+            ReduceOperation,
+            TransformOperation,
+            UpdateOperation,
+        )
+
+        if isinstance(other, (FilterOperation, MapOperation, ReduceOperation, TransformOperation)):
+            # Python operations - don't bind to target
+            return Pipeline(first=self, second=other)  # type: ignore[arg-type]
+
+        # Storage operations - bind to same target
+        bound_other = TargetBoundOperation(operation=other, target=self.target)
+        return Pipeline(first=self, second=bound_other)
 
     def __xor__(self, target: AbstractDataTarget) -> TargetBoundOperation[T_Result]:
         """Rebind to different target.

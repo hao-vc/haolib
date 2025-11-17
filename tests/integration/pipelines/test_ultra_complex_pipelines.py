@@ -10,6 +10,7 @@ Tests cover:
 """
 
 from contextlib import suppress
+from typing import Any
 
 import pytest
 
@@ -19,8 +20,8 @@ from haolib.database.files.s3.clients.abstract import (
     S3BucketAlreadyOwnedByYouClientException,
 )
 from haolib.database.files.s3.clients.pydantic import S3DeleteObjectsDelete, S3DeleteObjectsDeleteObject
+from haolib.pipelines import filtero, mapo, reduceo, transformo
 from haolib.storages.data_types.registry import DataTypeRegistry
-from haolib.storages.dsl import createo, filtero, mapo, reado, reduceo, transformo, updateo
 from haolib.storages.indexes.params import ParamIndex
 from haolib.storages.s3 import S3Storage
 from haolib.storages.sqlalchemy import SQLAlchemyStorage
@@ -93,25 +94,24 @@ class TestUltraComplexPipelines:
         # 16. Extract from S3 tuples
         # 17. Count results
 
-        result = await (
-            createo(users) ^ sqlalchemy_storage  # Stage 1: Create in SQL
+        result: Any = await (
+            sqlalchemy_storage.create(users).returning()  # Stage 1: Create in SQL
             | filtero(lambda u: u.age >= 30)  # Stage 2: Filter
             | mapo(lambda u, _idx: {"name": u.name, "age": u.age, "email": u.email, "source": "sql"})  # Stage 3: Map
-            | createo() ^ raw_storage  # Stage 4: Save to S3 Raw
+            | raw_storage.create().returning()  # Stage 4: Save to S3 Raw
             | mapo(lambda data, _idx: data[0])  # Stage 5: Extract from tuples
             | mapo(lambda d, _idx: {**d, "processed": True, "timestamp": "2024-01-01"})  # Stage 6: Enrich
             | filtero(lambda d: d["age"] >= 35)  # Stage 7: Filter again
-            | createo() ^ processed_storage  # Stage 8: Save to S3 Processed
+            | processed_storage.create().returning()  # Stage 8: Save to S3 Processed
             | mapo(lambda data, _idx: data[0])  # Stage 9: Extract from tuples
             | mapo(
                 lambda d, _idx: User(name=d["name"], age=d["age"], email=f"processed_{d['email']}")
             )  # Stage 10: Map to User with new email
-            | createo() ^ sqlalchemy_storage  # Stage 11: Save back to SQL
-            | reado(search_index=ParamIndex(User))  # Stage 12: Read from SQL
-            ^ sqlalchemy_storage
+            | sqlalchemy_storage.create().returning()  # Stage 11: Save back to SQL
+            | sqlalchemy_storage.read(ParamIndex(User)).returning()  # Stage 12: Read from SQL
             | filtero(lambda u: u.age >= 35)  # Stage 13: Filter
             | mapo(lambda u, _idx: {"name": u.name, "age": u.age, "email": u.email, "archived": True})  # Stage 14: Map
-            | createo() ^ archive_storage  # Stage 15: Save to S3 Archive
+            | archive_storage.create().returning()  # Stage 15: Save to S3 Archive
             | mapo(lambda data, _idx: data[0])  # Stage 16: Extract from tuples
             | reduceo(lambda acc, d: acc + 1, 0)  # Stage 17: Count
         ).execute()
@@ -193,14 +193,13 @@ class TestUltraComplexPipelines:
         # 20. Final validation
 
         result = await (
-            createo(users) ^ sqlalchemy_storage  # Stage 1: Create in SQL OLTP
-            | reado(search_index=ParamIndex(User))  # Stage 2: Read all
-            ^ sqlalchemy_storage
+            sqlalchemy_storage.create(users).returning()  # Stage 1: Create in SQL OLTP
+            | sqlalchemy_storage.read(ParamIndex(User)).returning()  # Stage 2: Read all
             | filtero(lambda u: u.age >= 30)  # Stage 3: Filter
             | mapo(
                 lambda u, _idx: {"name": u.name, "age": u.age, "email": u.email, "warehouse_id": f"WH_{u.name}"}
             )  # Stage 4: Add metadata
-            | createo() ^ raw_storage  # Stage 5: Save to data lake
+            | raw_storage.create().returning()  # Stage 5: Save to data lake
             | mapo(lambda data, _idx: data[0])  # Stage 6: Extract
             | mapo(
                 lambda d, _idx: {**d, "analytics_ready": True, "age_group": "senior" if d["age"] >= 35 else "mid"}
@@ -209,7 +208,7 @@ class TestUltraComplexPipelines:
             | mapo(
                 lambda d, _idx: {"id": d["warehouse_id"], "age": d["age"], "group": d["age_group"]}
             )  # Stage 9: Aggregate
-            | createo() ^ processed_storage  # Stage 10: Save to analytics layer
+            | processed_storage.create().returning()  # Stage 10: Save to analytics layer
             | mapo(lambda data, _idx: data[0])  # Stage 11: Extract
             | transformo(
                 lambda items: [
@@ -223,17 +222,17 @@ class TestUltraComplexPipelines:
             | mapo(
                 lambda stats, _idx: User(name="Aggregated", age=int(stats["avg_age"]), email="aggregated@example.com")
             )  # Stage 13: Map to User
-            | createo() ^ sqlalchemy_storage  # Stage 14: Save to data mart
-            | reado(search_index=ParamIndex(User, email="aggregated@example.com"))  # Stage 15: Read
-            ^ sqlalchemy_storage
+            | sqlalchemy_storage.create().returning()  # Stage 14: Save to data mart
+            | sqlalchemy_storage.read(ParamIndex(User, email="aggregated@example.com")).returning()  # Stage 15: Read
             | filtero(lambda u: u.age >= 30)  # Stage 16: Filter
             | mapo(lambda u, _idx: {"name": u.name, "age": u.age, "archived": True})  # Stage 17: Prepare
-            | createo() ^ archive_storage  # Stage 18: Archive
+            | archive_storage.create().returning()  # Stage 18: Archive
             | mapo(lambda data, _idx: data[0])  # Stage 19: Extract
             | reduceo(lambda acc, d: acc + 1, 0)  # Stage 20: Count
         ).execute()
 
-        assert isinstance(result, int) and result >= 0  # May be 0 or more depending on aggregation
+        assert isinstance(result, int)
+        assert result >= 0  # May be 0 or more depending on aggregation
 
         # Cleanup
         for bucket in [RAW_DATA_BUCKET, PROCESSED_DATA_BUCKET, ARCHIVE_BUCKET]:
@@ -299,16 +298,15 @@ class TestUltraComplexPipelines:
         # 18. Transform (create summary)
         # 19. Count
 
-        result = await (
-            createo(users) ^ sqlalchemy_storage  # Stage 1: Create
-            | reado(search_index=ParamIndex(User))  # Stage 2: Read
-            ^ sqlalchemy_storage
+        result: Any = await (
+            sqlalchemy_storage.create(users).returning()  # Stage 1: Create
+            | sqlalchemy_storage.read(ParamIndex(User)).returning()  # Stage 2: Read
             | filtero(lambda u: u.age >= 30)  # Stage 3: Filter
             | mapo(
                 lambda u, _idx: {"name": u.name, "age": u.age, "email": u.email, "tenant": "tenant1"}
             )  # Stage 4: Add tenant
             | mapo(lambda d, _idx: {**d, "normalized": True, "name": d["name"].upper()})  # Stage 5: Normalize
-            | createo() ^ raw_storage  # Stage 6: Backup
+            | raw_storage.create().returning()  # Stage 6: Backup
             | mapo(lambda data, _idx: data[0])  # Stage 7: Extract
             | mapo(
                 lambda d, _idx: {**d, "processing_status": "in_progress", "processed_at": "2024-01-01"}
@@ -317,15 +315,13 @@ class TestUltraComplexPipelines:
             | mapo(
                 lambda d, _idx: User(name=d["name"], age=d["age"], email=f"tenant_{d['email']}")
             )  # Stage 10: Transform with new email
-            | createo() ^ processed_storage  # Stage 11: Save processed
+            | processed_storage.create().returning()  # Stage 11: Save processed
             | mapo(lambda data, _idx: data[0])  # Stage 12: Extract
             | mapo(lambda u, _idx: u)  # Stage 13: Map to User
-            | updateo(
-                search_index=ParamIndex(User, email="tenant_charlie@example.com"), patch={"age": 36}
-            )  # Stage 14: Update
-            ^ sqlalchemy_storage
-            | reado(search_index=ParamIndex(User))  # Stage 15: Read updated
-            ^ sqlalchemy_storage
+            | sqlalchemy_storage.read(ParamIndex(User, email="tenant_charlie@example.com"))
+            .patch({"age": 36})
+            .returning()  # Stage 14: Update
+            | sqlalchemy_storage.read(ParamIndex(User)).returning()  # Stage 15: Read updated
             | filtero(lambda u: u.age >= 35)  # Stage 16: Filter
             | reduceo(lambda acc, u: acc + 1, 0)  # Stage 17: Count
         ).execute()
@@ -403,10 +399,9 @@ class TestUltraComplexPipelines:
         # 18. Extract and reduce (count)
         # 19. Final validation
 
-        result = await (
-            createo(users) ^ sqlalchemy_storage  # Stage 1: Create source
-            | reado(search_index=ParamIndex(User))  # Stage 2: Read
-            ^ sqlalchemy_storage
+        result: Any = await (
+            sqlalchemy_storage.create(users).returning()  # Stage 1: Create source
+            | sqlalchemy_storage.read(ParamIndex(User)).returning()  # Stage 2: Read
             | filtero(lambda u: u.age >= 30)  # Stage 3: Filter
             | mapo(
                 lambda u, _idx: {
@@ -417,7 +412,7 @@ class TestUltraComplexPipelines:
                     "timestamp": "2024-01-01T00:00:00Z",
                 }
             )  # Stage 4: Event metadata
-            | createo() ^ raw_storage  # Stage 5: Event stream
+            | raw_storage.create().returning()  # Stage 5: Event stream
             | mapo(lambda data, _idx: data[0])  # Stage 6: Extract
             | mapo(
                 lambda d, _idx: {
@@ -430,19 +425,18 @@ class TestUltraComplexPipelines:
             | mapo(
                 lambda d, _idx: {**d, "lifetime_value": d["age"] * 100, "engagement_score": d["age"] * 10}
             )  # Stage 9: Metrics
-            | createo() ^ processed_storage  # Stage 10: Analytics ready
+            | processed_storage.create().returning()  # Stage 10: Analytics ready
             | mapo(lambda data, _idx: data[0])  # Stage 11: Extract
             | mapo(
                 lambda d, _idx: User(name=d["name"], age=d["age"], email=f"analytics_{d['email']}")
             )  # Stage 12: To User with new email
-            | createo() ^ sqlalchemy_storage  # Stage 13: Analytics DB
-            | reado(search_index=ParamIndex(User))  # Stage 14: Read
-            ^ sqlalchemy_storage
+            | sqlalchemy_storage.create().returning()  # Stage 13: Analytics DB
+            | sqlalchemy_storage.read(ParamIndex(User)).returning()  # Stage 14: Read
             | filtero(lambda u: u.age >= 35)  # Stage 15: Filter
             | mapo(
                 lambda u, _idx: {"name": u.name, "age": u.age, "archived": True, "archive_date": "2024-01-01"}
             )  # Stage 16: Prepare
-            | createo() ^ archive_storage  # Stage 17: Archive
+            | archive_storage.create().returning()  # Stage 17: Archive
             | mapo(lambda data, _idx: data[0])  # Stage 18: Extract
             | reduceo(lambda acc, d: acc + 1, 0)  # Stage 19: Count
         ).execute()
@@ -519,10 +513,9 @@ class TestUltraComplexPipelines:
         # 17. Save to S3 Archive (old system archive)
         # 18. Extract and count
 
-        result = await (
-            createo(users) ^ sqlalchemy_storage  # Stage 1: Old system
-            | reado(search_index=ParamIndex(User))  # Stage 2: Read
-            ^ sqlalchemy_storage
+        result: Any = await (
+            sqlalchemy_storage.create(users).returning()  # Stage 1: Old system
+            | sqlalchemy_storage.read(ParamIndex(User)).returning()  # Stage 2: Read
             | filtero(lambda u: u.age >= 30)  # Stage 3: Filter
             | mapo(
                 lambda u, _idx: {
@@ -533,22 +526,21 @@ class TestUltraComplexPipelines:
                     "source": "old_system",
                 }
             )  # Stage 4: Migration metadata
-            | createo() ^ raw_storage  # Stage 5: Backup
+            | raw_storage.create().returning()  # Stage 5: Backup
             | mapo(lambda data, _idx: data[0])  # Stage 6: Extract
             | mapo(lambda d, _idx: {**d, "new_system_format": True, "name": d["name"].upper()})  # Stage 7: Transform
             | filtero(lambda d: d["age"] >= 35)  # Stage 8: Filter
             | mapo(lambda d, _idx: {**d, "system_version": "v2", "migrated_at": "2024-01-01"})  # Stage 9: New fields
-            | createo() ^ processed_storage  # Stage 10: Migrated data
+            | processed_storage.create().returning()  # Stage 10: Migrated data
             | mapo(lambda data, _idx: data[0])  # Stage 11: Extract
             | mapo(
                 lambda d, _idx: User(name=d["name"], age=d["age"], email=f"migrated_{d['email']}")
             )  # Stage 12: To User with new email
-            | createo() ^ sqlalchemy_storage  # Stage 13: New system
-            | reado(search_index=ParamIndex(User))  # Stage 14: Verify
-            ^ sqlalchemy_storage
+            | sqlalchemy_storage.create().returning()  # Stage 13: New system
+            | sqlalchemy_storage.read(ParamIndex(User)).returning()  # Stage 14: Verify
             | filtero(lambda u: u.age >= 35)  # Stage 15: Filter
             | mapo(lambda u, _idx: {"name": u.name, "age": u.age, "archived": True})  # Stage 16: Prepare
-            | createo() ^ archive_storage  # Stage 17: Archive old system
+            | archive_storage.create().returning()  # Stage 17: Archive old system
             | mapo(lambda data, _idx: data[0])  # Stage 18: Extract
             | reduceo(lambda acc, d: acc + 1, 0)  # Stage 19: Count
         ).execute()
@@ -626,10 +618,9 @@ class TestUltraComplexPipelines:
         # 18. Extract and count
         # 19. Final validation
 
-        result = await (
-            createo(users) ^ sqlalchemy_storage  # Stage 1: Production
-            | reado(search_index=ParamIndex(User))  # Stage 2: Read
-            ^ sqlalchemy_storage
+        result: Any = await (
+            sqlalchemy_storage.create(users).returning()  # Stage 1: Production
+            | sqlalchemy_storage.read(ParamIndex(User)).returning()  # Stage 2: Read
             | filtero(lambda u: u.age >= 30)  # Stage 3: Filter
             | mapo(
                 lambda u, _idx: {
@@ -640,7 +631,7 @@ class TestUltraComplexPipelines:
                     "audit_timestamp": "2024-01-01T00:00:00Z",
                 }
             )  # Stage 4: Audit trail
-            | createo() ^ raw_storage  # Stage 5: Audit log
+            | raw_storage.create().returning()  # Stage 5: Audit log
             | mapo(lambda data, _idx: data[0])  # Stage 6: Extract
             | mapo(
                 lambda d, _idx: {**d, "gdpr_compliant": True, "retention_required": True, "compliance_level": "high"}
@@ -649,20 +640,18 @@ class TestUltraComplexPipelines:
             | mapo(
                 lambda d, _idx: {**d, "retention_period": "7_years", "archive_date": "2024-01-01"}
             )  # Stage 9: Retention metadata
-            | createo() ^ processed_storage  # Stage 10: Compliance layer
+            | processed_storage.create().returning()  # Stage 10: Compliance layer
             | mapo(lambda data, _idx: data[0])  # Stage 11: Extract
             | mapo(lambda d, _idx: User(name=d["name"], age=d["age"], email=d["email"]))  # Stage 12: To User
-            | updateo(
-                search_index=ParamIndex(User, email="CHARLIE@example.com"), patch={"age": 36}
-            )  # Stage 13: Mark as audited
-            ^ sqlalchemy_storage
-            | reado(search_index=ParamIndex(User))  # Stage 14: Read
-            ^ sqlalchemy_storage
+            | sqlalchemy_storage.read(ParamIndex(User, email="CHARLIE@example.com"))
+            .patch({"age": 36})
+            .returning()  # Stage 13: Mark as audited
+            | sqlalchemy_storage.read(ParamIndex(User)).returning()  # Stage 14: Read
             | filtero(lambda u: u.age >= 35)  # Stage 15: Filter
             | mapo(
                 lambda u, _idx: {"name": u.name, "age": u.age, "archived": True, "compliance_verified": True}
             )  # Stage 16: Prepare
-            | createo() ^ archive_storage  # Stage 17: Long-term retention
+            | archive_storage.create().returning()  # Stage 17: Long-term retention
             | mapo(lambda data, _idx: data[0])  # Stage 18: Extract
             | reduceo(lambda acc, d: acc + 1, 0)  # Stage 19: Count
         ).execute()
@@ -737,10 +726,9 @@ class TestUltraComplexPipelines:
         # 15. Filter (age >= 35)
         # 16. Map and count
 
-        result = await (
-            createo(users) ^ sqlalchemy_storage  # Stage 1: Primary region
-            | reado(search_index=ParamIndex(User))  # Stage 2: Read
-            ^ sqlalchemy_storage
+        result: Any = await (
+            sqlalchemy_storage.create(users).returning()  # Stage 1: Primary region
+            | sqlalchemy_storage.read(ParamIndex(User)).returning()  # Stage 2: Read
             | filtero(lambda u: u.age >= 30)  # Stage 3: Filter
             | mapo(
                 lambda u, _idx: {
@@ -751,7 +739,7 @@ class TestUltraComplexPipelines:
                     "replication_id": f"REPL_{u.name}",
                 }
             )  # Stage 4: Region metadata
-            | createo() ^ raw_storage  # Stage 5: Replication queue
+            | raw_storage.create().returning()  # Stage 5: Replication queue
             | mapo(lambda data, _idx: data[0])  # Stage 6: Extract
             | mapo(
                 lambda d, _idx: {**d, "replication_status": "pending", "target_region": "us-west-2"}
@@ -760,14 +748,13 @@ class TestUltraComplexPipelines:
             | mapo(
                 lambda d, _idx: {**d, "replicated": True, "replication_timestamp": "2024-01-01T00:00:00Z"}
             )  # Stage 9: Transform
-            | createo() ^ processed_storage  # Stage 10: Replicated data
+            | processed_storage.create().returning()  # Stage 10: Replicated data
             | mapo(lambda data, _idx: data[0])  # Stage 11: Extract
             | mapo(
                 lambda d, _idx: User(name=d["name"], age=d["age"], email=f"replicated_{d['email']}")
             )  # Stage 12: To User with new email
-            | createo() ^ sqlalchemy_storage  # Stage 13: Secondary region
-            | reado(search_index=ParamIndex(User))  # Stage 14: Verify
-            ^ sqlalchemy_storage
+            | sqlalchemy_storage.create().returning()  # Stage 13: Secondary region
+            | sqlalchemy_storage.read(ParamIndex(User)).returning()  # Stage 14: Verify
             | filtero(lambda u: u.age >= 35)  # Stage 15: Filter
             | reduceo(lambda acc, u: acc + 1, 0)  # Stage 16: Count
         ).execute()
@@ -844,15 +831,14 @@ class TestUltraComplexPipelines:
         # 17. Save to S3 Archive
         # 18. Extract and count
 
-        result = await (
-            createo(users) ^ sqlalchemy_storage  # Stage 1: Raw features
-            | reado(search_index=ParamIndex(User))  # Stage 2: Read
-            ^ sqlalchemy_storage
+        result: Any = await (
+            sqlalchemy_storage.create(users).returning()  # Stage 1: Raw features
+            | sqlalchemy_storage.read(ParamIndex(User)).returning()  # Stage 2: Read
             | filtero(lambda u: u.age >= 30)  # Stage 3: Filter
             | mapo(
                 lambda u, _idx: {"name": u.name, "age": u.age, "email": u.email, "feature_vector": [u.age, len(u.name)]}
             )  # Stage 4: Extract features
-            | createo() ^ raw_storage  # Stage 5: Feature store
+            | raw_storage.create().returning()  # Stage 5: Feature store
             | mapo(lambda data, _idx: data[0])  # Stage 6: Extract
             | mapo(
                 lambda d, _idx: {**d, "normalized_age": d["age"] / 100, "name_length": len(d["name"])}
@@ -861,17 +847,16 @@ class TestUltraComplexPipelines:
             | mapo(
                 lambda d, _idx: {**d, "age_squared": d["age"] ** 2, "is_senior": d["age"] >= 35}
             )  # Stage 9: Engineer features
-            | createo() ^ processed_storage  # Stage 10: ML-ready features
+            | processed_storage.create().returning()  # Stage 10: ML-ready features
             | mapo(lambda data, _idx: data[0])  # Stage 11: Extract
             | mapo(
                 lambda d, _idx: User(name=d["name"], age=d["age"], email=f"ml_{d['email']}")
             )  # Stage 12: To User with new email
-            | createo() ^ sqlalchemy_storage  # Stage 13: Feature database
-            | reado(search_index=ParamIndex(User))  # Stage 14: Read
-            ^ sqlalchemy_storage
+            | sqlalchemy_storage.create().returning()  # Stage 13: Feature database
+            | sqlalchemy_storage.read(ParamIndex(User)).returning()  # Stage 14: Read
             | filtero(lambda u: u.age >= 35)  # Stage 15: Filter
             | mapo(lambda u, _idx: {"name": u.name, "age": u.age, "archived": True})  # Stage 16: Prepare
-            | createo() ^ archive_storage  # Stage 17: Archive
+            | archive_storage.create().returning()  # Stage 17: Archive
             | mapo(lambda data, _idx: data[0])  # Stage 18: Extract
             | reduceo(lambda acc, d: acc + 1, 0)  # Stage 19: Count
         ).execute()
@@ -947,10 +932,9 @@ class TestUltraComplexPipelines:
         # 16. Map (prepare for archive)
         # 17. Save to S3 Archive and count
 
-        result = await (
-            createo(users) ^ sqlalchemy_storage  # Stage 1: Stream source
-            | reado(search_index=ParamIndex(User))  # Stage 2: Read
-            ^ sqlalchemy_storage
+        result: Any = await (
+            sqlalchemy_storage.create(users).returning()  # Stage 1: Stream source
+            | sqlalchemy_storage.read(ParamIndex(User)).returning()  # Stage 2: Read
             | filtero(lambda u: u.age >= 30)  # Stage 3: Filter
             | mapo(
                 lambda u, _idx: {
@@ -961,24 +945,23 @@ class TestUltraComplexPipelines:
                     "offset": _idx,
                 }
             )  # Stage 4: Stream metadata
-            | createo() ^ raw_storage  # Stage 5: Stream buffer
+            | raw_storage.create().returning()  # Stage 5: Stream buffer
             | mapo(lambda data, _idx: data[0])  # Stage 6: Extract
             | mapo(
                 lambda d, _idx: {**d, "processed_at": "2024-01-01T00:00:00Z", "processing_latency_ms": 10}
             )  # Stage 7: Processing timestamp
             | filtero(lambda d: d["age"] >= 35)  # Stage 8: Filter
             | mapo(lambda d, _idx: {**d, "stream_position": d["offset"], "committed": True})  # Stage 9: Stream position
-            | createo() ^ processed_storage  # Stage 10: Processed stream
+            | processed_storage.create().returning()  # Stage 10: Processed stream
             | mapo(lambda data, _idx: data[0])  # Stage 11: Extract
             | mapo(
                 lambda d, _idx: User(name=d["name"], age=d["age"], email=f"stream_{d['email']}")
             )  # Stage 12: To User with new email
-            | createo() ^ sqlalchemy_storage  # Stage 13: Stream sink
-            | reado(search_index=ParamIndex(User))  # Stage 14: Read
-            ^ sqlalchemy_storage
+            | sqlalchemy_storage.create().returning()  # Stage 13: Stream sink
+            | sqlalchemy_storage.read(ParamIndex(User)).returning()  # Stage 14: Read
             | filtero(lambda u: u.age >= 35)  # Stage 15: Filter
             | mapo(lambda u, _idx: {"name": u.name, "age": u.age, "archived": True})  # Stage 16: Prepare
-            | createo() ^ archive_storage  # Stage 17: Archive
+            | archive_storage.create().returning()  # Stage 17: Archive
             | mapo(lambda data, _idx: data[0])  # Stage 18: Extract
             | reduceo(lambda acc, d: acc + 1, 0)  # Stage 19: Count
         ).execute()
@@ -1053,10 +1036,9 @@ class TestUltraComplexPipelines:
         # 15. Filter (age >= 35)
         # 16. Map and count
 
-        result = await (
-            createo(users) ^ sqlalchemy_storage  # Stage 1: Batch source
-            | reado(search_index=ParamIndex(User))  # Stage 2: Read
-            ^ sqlalchemy_storage
+        result: Any = await (
+            sqlalchemy_storage.create(users).returning()  # Stage 1: Batch source
+            | sqlalchemy_storage.read(ParamIndex(User)).returning()  # Stage 2: Read
             | filtero(lambda u: u.age >= 30)  # Stage 3: Filter
             | mapo(
                 lambda u, _idx: {
@@ -1067,21 +1049,20 @@ class TestUltraComplexPipelines:
                     "batch_timestamp": "2024-01-01T00:00:00Z",
                 }
             )  # Stage 4: Batch metadata
-            | createo() ^ raw_storage  # Stage 5: Batch storage
+            | raw_storage.create().returning()  # Stage 5: Batch storage
             | mapo(lambda data, _idx: data[0])  # Stage 6: Extract
             | mapo(
                 lambda d, _idx: {**d, "batch_processed": True, "processing_time_ms": 100}
             )  # Stage 7: Processing flags
             | filtero(lambda d: d["age"] >= 35)  # Stage 8: Filter
             | mapo(lambda d, _idx: {**d, "batch_aggregate": True, "total_items": 1})  # Stage 9: Aggregate
-            | createo() ^ processed_storage  # Stage 10: Processed batch
+            | processed_storage.create().returning()  # Stage 10: Processed batch
             | mapo(lambda data, _idx: data[0])  # Stage 11: Extract
             | mapo(
                 lambda d, _idx: User(name=d["name"], age=d["age"], email=f"batch_{d['email']}")
             )  # Stage 12: To User with new email
-            | createo() ^ sqlalchemy_storage  # Stage 13: Batch results
-            | reado(search_index=ParamIndex(User))  # Stage 14: Read
-            ^ sqlalchemy_storage
+            | sqlalchemy_storage.create().returning()  # Stage 13: Batch results
+            | sqlalchemy_storage.read(ParamIndex(User)).returning()  # Stage 14: Read
             | filtero(lambda u: u.age >= 35)  # Stage 15: Filter
             | reduceo(lambda acc, u: acc + 1, 0)  # Stage 16: Count
         ).execute()
