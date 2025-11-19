@@ -1,5 +1,3 @@
-"""Library module containing reusable components for the application.
+"""haolib. Build better. Build faster. Build SOTA."""
 
-This module provides common utilities and other
-helper components that can be used across the application.
-"""
+__version__ = "0.1.3"

@@ -34,10 +34,9 @@ await hao.run_entrypoints()
 
 - **User Experience** — Extremely convenient to use
 - **Customizability** — Fully extensible and declarative
-- **Meta-framework** — Works with any framework
+- **Meta-framework** — Solves high-level problems
 - **SOTA** — State-of-the-art toolkit
 - **Implementation-agnostic** — Replace any component
-- **All-in-one** — Single package, optional dependencies
 - **9/10** — Almost perfect. Almost.
 
 ## Features
