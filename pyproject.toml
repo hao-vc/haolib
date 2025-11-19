@@ -1,6 +1,6 @@
 [project]
 name = "haolib"
-version = "0.1.0"
+version = "0.1.1"
 description = "A Python utility library with common components for building applications in the HAO ecosystem"
 readme = "README.md"
 authors = [{ name = "Kamil Biktimirov" }]
@@ -38,10 +38,6 @@ observability = [
 security = ["bcrypt>=4.3.0", "cryptography>=45.0.6", "pyjwt[crypto]>=2.10.1"]
 s3 = ["aioboto3>=15.5.0"]
 
-
-[build-system]
-requires = ["maturin>=1.0,<2.0"]
-build-backend = "maturin"
 
 [tool.setuptools.package-data]
 "haolib" = ["py.typed"]
@@ -82,8 +78,8 @@ lint.ignore = [
     "TC001",   # typing-only-first-party-import
     "TC002",   # typing-only-third-party-import
     "TC003",   # typing-only-standard-library-import
-    "PLR0911", # too-many-return-statements 
-    "PLR0912", # too-many-branches 
+    "PLR0911", # too-many-return-statements
+    "PLR0912", # too-many-branches
     "C901",    # complex-structure
 ]
 
