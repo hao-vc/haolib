@@ -125,7 +125,7 @@ class PipelineValidator:
         collect(pipeline)
         return operations
 
-    def _validate_operation(
+    def _validate_operation(  # noqa: PLR0915
         self,
         operation: Operation[Any, Any] | TargetBoundOperation[Any] | TargetSwitch[Any, Any],
         index: int,
@@ -212,7 +212,7 @@ class PipelineValidator:
                 PatchOperation,
                 UpdateOperation,
             )
-            
+
             # CreateOperation can work without target if it receives previous_result OR has data
             if isinstance(actual_op, CreateOperation):
                 if receives_previous:
@@ -257,41 +257,39 @@ class PipelineValidator:
                         else:
                             # Has search_index, but also receives previous_result - this is OK too
                             pass
-                else:
-                    # No previous_result - must have search_index (and data/patch for update/patch)
-                    if isinstance(actual_op, UpdateOperation):
-                        if actual_op.search_index is None or actual_op.data is None:
-                            op_name = type(actual_op).__name__ if isinstance(actual_op, Operation) else "Operation"
-                            msg = (
-                                f"Operation {op_name} at index {index} requires either search_index and data, "
-                                f"or previous_result from pipeline."
-                            )
-                            raise PipelineValidationError(
-                                msg,
-                                operation_index=index,
-                            )
-                    elif isinstance(actual_op, PatchOperation):
-                        if actual_op.search_index is None or actual_op.patch is None:
-                            op_name = type(actual_op).__name__ if isinstance(actual_op, Operation) else "Operation"
-                            msg = (
-                                f"Operation {op_name} at index {index} requires either search_index and patch, "
-                                f"or previous_result from pipeline."
-                            )
-                            raise PipelineValidationError(
-                                msg,
-                                operation_index=index,
-                            )
-                    elif isinstance(actual_op, DeleteOperation):
-                        if actual_op.search_index is None:
-                            op_name = type(actual_op).__name__ if isinstance(actual_op, Operation) else "Operation"
-                            msg = (
-                                f"Operation {op_name} at index {index} requires either search_index "
-                                f"or previous_result from pipeline."
-                            )
-                            raise PipelineValidationError(
-                                msg,
-                                operation_index=index,
-                            )
+                # No previous_result - must have search_index (and data/patch for update/patch)
+                elif isinstance(actual_op, UpdateOperation):
+                    if actual_op.search_index is None or actual_op.data is None:
+                        op_name = type(actual_op).__name__ if isinstance(actual_op, Operation) else "Operation"
+                        msg = (
+                            f"Operation {op_name} at index {index} requires either search_index and data, "
+                            f"or previous_result from pipeline."
+                        )
+                        raise PipelineValidationError(
+                            msg,
+                            operation_index=index,
+                        )
+                elif isinstance(actual_op, PatchOperation):
+                    if actual_op.search_index is None or actual_op.patch is None:
+                        op_name = type(actual_op).__name__ if isinstance(actual_op, Operation) else "Operation"
+                        msg = (
+                            f"Operation {op_name} at index {index} requires either search_index and patch, "
+                            f"or previous_result from pipeline."
+                        )
+                        raise PipelineValidationError(
+                            msg,
+                            operation_index=index,
+                        )
+                elif isinstance(actual_op, DeleteOperation) and actual_op.search_index is None:
+                    op_name = type(actual_op).__name__ if isinstance(actual_op, Operation) else "Operation"
+                    msg = (
+                        f"Operation {op_name} at index {index} requires either search_index "
+                        f"or previous_result from pipeline."
+                    )
+                    raise PipelineValidationError(
+                        msg,
+                        operation_index=index,
+                    )
             else:
                 # All other target-requiring operations must have target
                 op_name = type(actual_op).__name__ if isinstance(actual_op, Operation) else "Operation"
@@ -330,4 +328,3 @@ class PipelineValidator:
             operation,
             (ReadOperation, CreateOperation, PatchOperation, UpdateOperation, DeleteOperation),
         )
-

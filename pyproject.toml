@@ -8,10 +8,13 @@ keywords = ["backend", "utilities", "microservices", "observability"]
 requires-python = ">=3.14"
 dependencies = [
     "httpx>=0.28.1",
+    "packaging>=25.0",
     "pydantic>=2.12.3",
     "pydantic-settings>=2.11.0",
+    "pytest-timeout>=2.4.0",
     "uvloop>=0.21.0",
 ]
+license = "MIT OR Apache-2.0"
 
 [project.optional-dependencies]
 dishka = ["dishka>=1.6.0"]
@@ -35,6 +38,10 @@ observability = [
 security = ["bcrypt>=4.3.0", "cryptography>=45.0.6", "pyjwt[crypto]>=2.10.1"]
 s3 = ["aioboto3>=15.5.0"]
 
+
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
 
 [tool.setuptools.package-data]
 "haolib" = ["py.typed"]
@@ -75,13 +82,22 @@ lint.ignore = [
     "TC001",   # typing-only-first-party-import
     "TC002",   # typing-only-third-party-import
     "TC003",   # typing-only-standard-library-import
+    "PLR0911", # too-many-return-statements 
+    "PLR0912", # too-many-branches 
+    "C901",    # complex-structure
 ]
 
 [tool.ruff.lint.per-file-ignores]
 "./tests/integration/s3/conftest.py" = ["ARG002", "EM102"]
+"./tests/*" = ["SLF001"]
+
 
 [tool.mypy]
 python_version = "3.14"
+
+[tool.pytest.ini_options]
+timeout = 30
+timeout_method = "thread"
 
 [tool.coverage.run]
 # We need *__dishka_factory* here to be excluded because it is a generated file by dishka.
@@ -89,12 +105,16 @@ omit = ["*/lib/*", "*__dishka_factory*", "app.py", "dependencies.py", "tests/*"]
 
 [dependency-groups]
 dev = [
+    "aiosqlite>=0.21.0",
     "faststream[confluent]>=0.6.3",
     "httpx>=0.28.1",
     "mypy>=1.18.1",
+    "psutil>=7.1.3",
     "pytest>=8.4.1",
     "pytest-asyncio>=1.1.0",
+    "pytest-benchmark>=5.2.3",
     "pytest-cov>=6.2.1",
+    "pytest-timeout>=2.3.1",
     "pytest-xdist>=3.8.0",
     "ruff>=0.12.9",
 ]

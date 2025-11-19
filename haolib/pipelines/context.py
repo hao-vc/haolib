@@ -7,12 +7,9 @@ enabling global optimization across multiple targets.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from haolib.pipelines.base import Operation, Pipeline
-
-if TYPE_CHECKING:
-    from haolib.storages.targets.abstract import AbstractDataTarget
 
 
 @dataclass(frozen=True)
@@ -92,4 +89,3 @@ class PipelineContext:
 
         """
         return len(self.get_future_operations(target)) > 0
-

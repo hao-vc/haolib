@@ -66,4 +66,3 @@ def normalize_patch(patch: Any) -> dict[str, Any] | Callable:
 
     msg = f"Patch must be dict, BaseModel, dataclass, or callable, got {type(patch)}"
     raise TypeError(msg)
-
